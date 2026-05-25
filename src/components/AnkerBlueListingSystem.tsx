@@ -646,34 +646,103 @@ export default function AnkerBlueListingSystem({
 
   // --- SYNC, IMPORT, BACKUP FUNCTIONS ---
   const handleExportWorkspaceJson = () => {
-    const backupData = {
-      version: "2.0-full-sync",
-      projectsList,
-      categories,
-      currentCategory,
-      activeProjectId,
-      aplusLayoutMode
-    };
+    const dbKeys = new Set<string>();
     
-    try {
-      const dataStr = JSON.stringify(backupData);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const linkElement = document.createElement('a');
-      linkElement.setAttribute('href', url);
-      linkElement.setAttribute('download', 'anker_custom_portfolio_backup.json');
-      linkElement.click();
-      URL.revokeObjectURL(url);
+    // Scan all projects to see what keys are referenced in IndexedDB from our dynamic upload systems
+    projectsList.forEach(p => {
+      if (p.img && p.img.startsWith("db_img_")) {
+        dbKeys.add(p.img);
+      }
+      if (p.mainImages) {
+        p.mainImages.forEach(item => {
+          if (item.img && item.img.startsWith("db_img_")) {
+            dbKeys.add(item.img);
+          }
+        });
+      }
+      if (p.aplusBlocks) {
+        p.aplusBlocks.forEach(block => {
+          if (block.premiumImg && block.premiumImg.startsWith("db_img_")) {
+            dbKeys.add(block.premiumImg);
+          }
+          if (block.competitorImg && block.competitorImg.startsWith("db_img_")) {
+            dbKeys.add(block.competitorImg);
+          }
+          if (block.carouselSlides) {
+            block.carouselSlides.forEach(slide => {
+              if (slide.img && slide.img.startsWith("db_img_")) {
+                dbKeys.add(slide.img);
+              }
+            });
+          }
+          if (block.gridCards) {
+            block.gridCards.forEach(card => {
+              if (card.img && card.img.startsWith("db_img_")) {
+                dbKeys.add(card.img);
+              }
+            });
+          }
+        });
+      }
+    });
+
+    const keysArray = Array.from(dbKeys);
+    const dbImagesMap: Record<string, string> = {};
+    
+    const toastId = addToast(
+      "uploading",
+      "📤 正在打包高清图片数据 / Pack IMGs",
+      `正在读取全站 ${keysArray.length} 张您自行上传的高精视网膜素材原画，加载入离线程序包进行统一持久化打包...`
+    );
+
+    Promise.all(
+      keysArray.map(async (key) => {
+        try {
+          const base64 = await getFromIndexedDB(key);
+          if (base64) {
+            dbImagesMap[key] = base64;
+          }
+        } catch (e) {
+          console.error("Failed to read image for backup key:", key, e);
+        }
+      })
+    ).then(() => {
+      const backupData = {
+        version: "2.5-packed-sync",
+        projectsList,
+        categories,
+        currentCategory,
+        activeProjectId,
+        aplusLayoutMode,
+        indexedDbImages: dbImagesMap
+      };
       
-      addToast(
-        "success", 
-        "📤 备份导出成功 / Export Succeeded", 
-        "全站自定案例、排版和 Base64 图片已打包导出为本地 JSON 备份文件。您可以导入 Vercel 等新部署网址中同步恢复！"
-      );
-    } catch (e) {
-      console.error(e);
-      addToast("error", "导出失败 / Export Failed", "导出数据时发生错误，请重试。");
-    }
+      try {
+        const dataStr = JSON.stringify(backupData);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', url);
+        linkElement.setAttribute('download', 'anker_custom_portfolio_backup.json');
+        linkElement.click();
+        URL.revokeObjectURL(url);
+        
+        removeToast(toastId);
+        addToast(
+          "success", 
+          "📤 备份包导出成功 (含高清素材)", 
+          `成功！已将包含 ${Object.keys(dbImagesMap).length} 张无损大图、全套自定排版、文字描述的数据打包为 Unified JSON 备份。换域名或部署 Vercel 可秒速无损导入！`
+        );
+      } catch (err) {
+        removeToast(toastId);
+        console.error(err);
+        addToast("error", "二进制组包失败 / Export Error", "由于媒体资源数据量巨大可能导致内存超限，请尝试减少案例大图后再次导出。");
+      }
+    }).catch(err => {
+      removeToast(toastId);
+      console.error(err);
+      addToast("error", "读取大图池失败", "读取浏览器 IndexedDB 时出现阻断异常。");
+    });
   };
 
   const handleImportWorkspaceJson = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -687,33 +756,88 @@ export default function AnkerBlueListingSystem({
         const backupData = JSON.parse(result);
         
         if (backupData && backupData.projectsList && backupData.categories) {
-          setProjectsList(backupData.projectsList);
-          setCategories(backupData.categories);
+          const imagesToSave = backupData.indexedDbImages || {};
+          const keysToSave = Object.keys(imagesToSave);
           
-          if (backupData.currentCategory) {
-            setCurrentCategory(backupData.currentCategory);
+          if (keysToSave.length > 0) {
+            const importToastId = addToast(
+              "uploading",
+              "📥 正在全自动克隆高清图到新域名/站点...",
+              `检测到备份中包含 ${keysToSave.length} 张原画图片，正在注入该站本地 IndexedDB 存储，一键恢复视网膜原图...`
+            );
+            
+            Promise.all(
+              keysToSave.map(key => saveToIndexedDB(key, imagesToSave[key]))
+            ).then(() => {
+              removeToast(importToastId);
+              
+              setProjectsList(backupData.projectsList);
+              setCategories(backupData.categories);
+              
+              if (backupData.currentCategory) {
+                setCurrentCategory(backupData.currentCategory);
+              }
+              if (backupData.activeProjectId) {
+                setActiveProjectId(backupData.activeProjectId);
+              }
+              if (backupData.aplusLayoutMode) {
+                setAplusLayoutMode(backupData.aplusLayoutMode);
+              }
+              
+              localStorage.setItem("anker_blue_projects_v2", JSON.stringify(backupData.projectsList));
+              localStorage.setItem("anker_blue_categories_v2", JSON.stringify(backupData.categories));
+              if (backupData.currentCategory) {
+                localStorage.setItem("anker_current_category_v2", backupData.currentCategory);
+              }
+              if (backupData.activeProjectId) {
+                localStorage.setItem("anker_active_project_id_v2", String(backupData.activeProjectId));
+              }
+              
+              addToast(
+                "success", 
+                "📥 备份无损克隆成功 / Recovery Success", 
+                `恭喜！成功写入 ${keysToSave.length} 张原画原图！文字内容、微调排版和无损多媒体细节已达到 100% 物理对齐状态！`
+              );
+            }).catch(writeErr => {
+              removeToast(importToastId);
+              console.error(writeErr);
+              addToast("warning", "大图写入过程由于沙盒阻断受限", "基础结构、排版与文字描述已加载，但部分高清图片可能需要您手动双击卡片重新上传。");
+              
+              setProjectsList(backupData.projectsList);
+              setCategories(backupData.categories);
+              if (backupData.currentCategory) setCurrentCategory(backupData.currentCategory);
+              if (backupData.activeProjectId) setActiveProjectId(backupData.activeProjectId);
+            });
+          } else {
+            // No embedded images (old format or purely layout backup)
+            setProjectsList(backupData.projectsList);
+            setCategories(backupData.categories);
+            
+            if (backupData.currentCategory) {
+              setCurrentCategory(backupData.currentCategory);
+            }
+            if (backupData.activeProjectId) {
+              setActiveProjectId(backupData.activeProjectId);
+            }
+            if (backupData.aplusLayoutMode) {
+              setAplusLayoutMode(backupData.aplusLayoutMode);
+            }
+            
+            localStorage.setItem("anker_blue_projects_v2", JSON.stringify(backupData.projectsList));
+            localStorage.setItem("anker_blue_categories_v2", JSON.stringify(backupData.categories));
+            if (backupData.currentCategory) {
+              localStorage.setItem("anker_current_category_v2", backupData.currentCategory);
+            }
+            if (backupData.activeProjectId) {
+              localStorage.setItem("anker_active_project_id_v2", String(backupData.activeProjectId));
+            }
+            
+            addToast(
+              "success", 
+              "📥 备份还原成功 (不含嵌入图片数据)", 
+              "排版基础骨架与文案大纲已成功还原！检测到该备份不含高清图片，如有破损图片，请双击对应卡片重新上传高清原件即可。"
+            );
           }
-          if (backupData.activeProjectId) {
-            setActiveProjectId(backupData.activeProjectId);
-          }
-          if (backupData.aplusLayoutMode) {
-            setAplusLayoutMode(backupData.aplusLayoutMode);
-          }
-          
-          localStorage.setItem("anker_blue_projects_v2", JSON.stringify(backupData.projectsList));
-          localStorage.setItem("anker_blue_categories_v2", JSON.stringify(backupData.categories));
-          if (backupData.currentCategory) {
-            localStorage.setItem("anker_current_category_v2", backupData.currentCategory);
-          }
-          if (backupData.activeProjectId) {
-            localStorage.setItem("anker_active_project_id_v2", String(backupData.activeProjectId));
-          }
-          
-          addToast(
-            "success", 
-            "📥 备份还原成功 / Sync Success", 
-            "恭喜！所有已上传的作品、自定义排版布局与图片素材已完美导入并即时刷新同步！"
-          );
         } else {
           addToast("error", "导入失败 / Import Failed", "导入的文件格式不匹配，无法读取项目及排版数据。");
         }

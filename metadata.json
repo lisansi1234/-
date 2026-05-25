@@ -1,0 +1,6 @@
+{
+  "name": "AEROCORE Portfolio",
+  "description": "An elite, interactive full-stack portfolio showcasing premium e-commerce product design, blending Apple minimalism with EcoFlow hardware technology aesthetics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

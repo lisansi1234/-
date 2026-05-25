@@ -644,6 +644,88 @@ export default function AnkerBlueListingSystem({
   // Track whether to hide/remove carousel text overlay per-block
   const [hideCarouselText, setHideCarouselText] = useState<Record<number, boolean>>({});
 
+  // --- SYNC, IMPORT, BACKUP FUNCTIONS ---
+  const handleExportWorkspaceJson = () => {
+    const backupData = {
+      version: "2.0-full-sync",
+      projectsList,
+      categories,
+      currentCategory,
+      activeProjectId,
+      aplusLayoutMode
+    };
+    
+    try {
+      const dataStr = JSON.stringify(backupData);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', url);
+      linkElement.setAttribute('download', 'anker_custom_portfolio_backup.json');
+      linkElement.click();
+      URL.revokeObjectURL(url);
+      
+      addToast(
+        "success", 
+        "📤 备份导出成功 / Export Succeeded", 
+        "全站自定案例、排版和 Base64 图片已打包导出为本地 JSON 备份文件。您可以导入 Vercel 等新部署网址中同步恢复！"
+      );
+    } catch (e) {
+      console.error(e);
+      addToast("error", "导出失败 / Export Failed", "导出数据时发生错误，请重试。");
+    }
+  };
+
+  const handleImportWorkspaceJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const result = event.target?.result as string;
+        const backupData = JSON.parse(result);
+        
+        if (backupData && backupData.projectsList && backupData.categories) {
+          setProjectsList(backupData.projectsList);
+          setCategories(backupData.categories);
+          
+          if (backupData.currentCategory) {
+            setCurrentCategory(backupData.currentCategory);
+          }
+          if (backupData.activeProjectId) {
+            setActiveProjectId(backupData.activeProjectId);
+          }
+          if (backupData.aplusLayoutMode) {
+            setAplusLayoutMode(backupData.aplusLayoutMode);
+          }
+          
+          localStorage.setItem("anker_blue_projects_v2", JSON.stringify(backupData.projectsList));
+          localStorage.setItem("anker_blue_categories_v2", JSON.stringify(backupData.categories));
+          if (backupData.currentCategory) {
+            localStorage.setItem("anker_current_category_v2", backupData.currentCategory);
+          }
+          if (backupData.activeProjectId) {
+            localStorage.setItem("anker_active_project_id_v2", String(backupData.activeProjectId));
+          }
+          
+          addToast(
+            "success", 
+            "📥 备份还原成功 / Sync Success", 
+            "恭喜！所有已上传的作品、自定义排版布局与图片素材已完美导入并即时刷新同步！"
+          );
+        } else {
+          addToast("error", "导入失败 / Import Failed", "导入的文件格式不匹配，无法读取项目及排版数据。");
+        }
+      } catch (err) {
+        console.error(err);
+        addToast("error", "解析校验错误", "导入的 JSON 文件可能已损坏或格式有误。");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   // Non-blocking dual-click confirmation states to bypass iframe window.confirm restrictions
   const [confirmDeleteSlide, setConfirmDeleteSlide] = useState<string | null>(null);
   const [confirmDeleteCatId, setConfirmDeleteCatId] = useState<string | null>(null);
@@ -3622,6 +3704,37 @@ Module #${i + 1}: ${b.title}
             </div>
           </div>
 
+          {/* 6. Cloud Sync and Backup (Vercel deployment state solution!) */}
+          <div className="space-y-2 border-b border-white/5 pb-3">
+            <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest block font-bold">// CLOUD BACKUP & SYNC / 全站已上传作品同步</span>
+            <div className="space-y-1.5">
+              <button 
+                type="button"
+                onClick={handleExportWorkspaceJson}
+                className="w-full py-1.5 bg-[#0066ff]/10 hover:bg-[#0066ff]/20 border border-[#0066ff]/30 hover:border-[#00d2ff]/40 text-[#00d2ff] rounded-lg text-[9.5px] font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                title="导出本站所有作品、素材及微调数据成 JSON 备份文件"
+              >
+                <DownloadCloud className="w-3.5 h-3.5" />
+                <span>📥 备份导出全站作品数据 (.json)</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  const uploader = document.getElementById('importGlobalBackupJsonField');
+                  if (uploader) uploader.click();
+                }}
+                className="w-full py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-400/30 text-emerald-400 rounded-lg text-[9.5px] font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                title="导入之前备份好的作品 JSON 文件，一键恢复到 Vercel 网址上！"
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-pulse text-emerald-400 font-bold" />
+                <span>📤 导入恢复/同步至新站点 (.json)</span>
+              </button>
+              <p className="text-[8.2px] text-zinc-500 leading-normal text-left bg-white/[0.01] p-1.5 rounded-md border border-white/5 font-sans scale-95 origin-center">
+                💡 <b>Vercel同步说明</b>：Vercel是纯静态托管，其本地存储由您的浏览器域名独立隔离。您只需在此处点击<b>“备份导出”</b>，然后登录您的 Vercel 站点打开相同的面板点击<b>“导入恢复”</b>，即可 1 毫秒完美克隆所有上传的作品、高清长图和自定义参数！
+              </p>
+            </div>
+          </div>
+
           <div className="text-[8.5px] text-zinc-500 leading-relaxed font-sans space-y-1 text-left">
             <div className="flex items-start">
               <span className="text-[#00d2ff] mr-1">▶</span>
@@ -3728,6 +3841,14 @@ Module #${i + 1}: ${b.title}
         accept="image/*" 
         className="hidden" 
         onChange={handleAnkerImageUpload} 
+      />
+
+      <input 
+        type="file" 
+        id="importGlobalBackupJsonField" 
+        accept=".json" 
+        className="hidden" 
+        onChange={handleImportWorkspaceJson} 
       />
 
       {/* 浮动文字高级样式调色盘 (Notion / Medium 风格，完全无代码随意调节文字大小、粗细、颜色) */}

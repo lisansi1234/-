@@ -30,6 +30,25 @@ import DeletableText from "./DeletableText";
 import DeletableWrapper from "./DeletableWrapper";
 import persistedDefaults from "../data/persisted_defaults.json";
 
+// --- DYNAMIC RUNTIME BACKUP / PERSISTENCE DEFAULTS SYSTEM ---
+export let globalDynamicDefaults: any = null;
+const dynamicDefaultsListeners = new Set<(defaults: any) => void>();
+
+export function registerDynamicDefaultsListener(listener: (defaults: any) => void) {
+  dynamicDefaultsListeners.add(listener);
+  if (globalDynamicDefaults) {
+    listener(globalDynamicDefaults);
+  }
+  return () => {
+    dynamicDefaultsListeners.delete(listener);
+  };
+}
+
+export function setGlobalDynamicDefaults(data: any) {
+  globalDynamicDefaults = data;
+  dynamicDefaultsListeners.forEach(l => l(data));
+}
+
 // --- INDEXEDDB HELPER FOR HIGH-RES LOSSLESS IMAGES ---
 const DB_NAME = "AerocorePortfolioDB";
 const STORE_NAME = "images";
@@ -124,6 +143,13 @@ interface SafeImageProps {
 
 export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
   const [resolvedSrc, setResolvedSrc] = useState<string>("");
+  const [dynamicDefaults, setDynamicDefaults] = useState<any>(globalDynamicDefaults);
+
+  useEffect(() => {
+    return registerDynamicDefaultsListener((defaults) => {
+      setDynamicDefaults(defaults);
+    });
+  }, []);
 
   useEffect(() => {
     if (!src) {
@@ -136,7 +162,25 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
         if (resolved) {
           setResolvedSrc(resolved);
         } else {
-          // Fallback to persisted defaults JSON from code repository if empty
+          // Layer 2: Check dynamic defaults loaded live from Express server filesystem at runtime
+          const dynImage = (dynamicDefaults?.dbImagesMap as Record<string, string>)?.[src];
+          if (dynImage) {
+            setResolvedSrc(dynImage);
+          } else {
+            // Layer 3: Fallback to compiled static default JSON file
+            const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
+            if (staticImage) {
+              setResolvedSrc(staticImage);
+            } else {
+              setResolvedSrc(fallback || "");
+            }
+          }
+        }
+      }).catch(() => {
+        const dynImage = (dynamicDefaults?.dbImagesMap as Record<string, string>)?.[src];
+        if (dynImage) {
+          setResolvedSrc(dynImage);
+        } else {
           const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
           if (staticImage) {
             setResolvedSrc(staticImage);
@@ -144,18 +188,11 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
             setResolvedSrc(fallback || "");
           }
         }
-      }).catch(() => {
-        const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
-        if (staticImage) {
-          setResolvedSrc(staticImage);
-        } else {
-          setResolvedSrc(fallback || "");
-        }
       });
     } else {
       setResolvedSrc(src);
     }
-  }, [src, fallback]);
+  }, [src, fallback, dynamicDefaults]);
 
   const currentSrc = resolvedSrc || (src && !src.startsWith("db_img_") ? src : fallback) || undefined;
 
@@ -732,6 +769,63 @@ export default function AnkerBlueListingSystem({
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_current_category_v2;
     return (persisted as string) || "storage";
   });
+
+  // Synchronize state dynamically when the live server defaults are retrieved/fetched
+  useEffect(() => {
+    const handleDefaultsLoaded = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const data = customEvent.detail;
+      if (data && data.localStorageDump) {
+        const hasLocalProjects = localStorage.getItem("anker_blue_projects_v2") !== null;
+        if (!hasLocalProjects) {
+          const serverProjects = data.localStorageDump.anker_blue_projects_v2;
+          if (serverProjects) {
+            setProjectsList(typeof serverProjects === "string" ? JSON.parse(serverProjects) : serverProjects);
+          }
+        }
+        const hasLocalCategories = localStorage.getItem("anker_blue_categories_v2") !== null;
+        if (!hasLocalCategories) {
+          const serverCategories = data.localStorageDump.anker_blue_categories_v2;
+          if (serverCategories) {
+            setCategories(typeof serverCategories === "string" ? JSON.parse(serverCategories) : serverCategories);
+          }
+        }
+        const hasLocalCategory = localStorage.getItem("anker_current_category_v2") !== null;
+        if (!hasLocalCategory) {
+          const serverCategory = data.localStorageDump.anker_current_category_v2;
+          if (serverCategory) {
+            setCurrentCategory(serverCategory);
+          }
+        }
+        const hasLocalActiveId = localStorage.getItem("anker_active_project_id_v2") !== null;
+        if (!hasLocalActiveId) {
+          const serverActiveId = data.localStorageDump.anker_active_project_id_v2;
+          if (serverActiveId !== undefined && serverActiveId !== null) {
+            setActiveProjectId(typeof serverActiveId === "number" ? serverActiveId : parseInt(serverActiveId, 10));
+          }
+        }
+        const hasLocalAccent = localStorage.getItem("ae_theme_accent") !== null;
+        if (!hasLocalAccent) {
+          const serverAccent = data.localStorageDump.ae_theme_accent;
+          if (serverAccent && ACCENT_PRESETS[serverAccent]) {
+            setThemeAccent(serverAccent);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+
+    // If globalDynamicDefaults has already fetched when we mount, apply immediately!
+    if (globalDynamicDefaults && globalDynamicDefaults.localStorageDump) {
+      const fakeEvent = new CustomEvent("ae_dynamic_defaults_loaded", { detail: globalDynamicDefaults });
+      handleDefaultsLoaded(fakeEvent);
+    }
+
+    return () => {
+      window.removeEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+    };
+  }, []);
 
   useEffect(() => {
     try {

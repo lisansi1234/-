@@ -90,6 +90,56 @@ export default function DeletableText({
     };
   }, [localStorageKey, defaultText, id]);
 
+  // Synchronize state dynamically when the live server defaults are retrieved/fetched
+  useEffect(() => {
+    const handleDefaultsLoaded = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const data = customEvent.detail;
+      if (data && data.localStorageDump) {
+        const local = localStorage.getItem(localStorageKey);
+        if (local === null) {
+          const persisted = data.localStorageDump[localStorageKey];
+          if (persisted !== undefined) setText(persisted);
+        }
+        
+        const localDel = localStorage.getItem(`${localStorageKey}_deleted`);
+        if (localDel === null) {
+          const persisted = data.localStorageDump[`${localStorageKey}_deleted`];
+          if (persisted !== undefined) {
+            setIsDeleted(persisted === true || persisted === "true");
+          }
+        }
+
+        const localStyle = localStorage.getItem(`ae_delstyle_${id}`);
+        if (localStyle === null) {
+          const persisted = data.localStorageDump[`ae_delstyle_${id}`];
+          if (persisted !== undefined) setExtraClasses(persisted);
+        }
+
+        const localSiblings = localStorage.getItem(`ae_deltext_v3_${id}_siblings`);
+        if (localSiblings === null) {
+          const persisted = data.localStorageDump[`ae_deltext_v3_${id}_siblings`];
+          if (persisted !== undefined && persisted !== null) {
+            setSiblings(typeof persisted === "string" ? JSON.parse(persisted) : persisted);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+
+    // If global files already fetched in the background, update immediately
+    const globalWin = (window as any);
+    if (globalWin.__loadedDynamicDefaults) {
+      const fakeEvent = new CustomEvent("ae_dynamic_defaults_loaded", { detail: globalWin.__loadedDynamicDefaults });
+      handleDefaultsLoaded(fakeEvent);
+    }
+
+    return () => {
+      window.removeEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+    };
+  }, [id, localStorageKey]);
+
   const addSibling = () => {
     const next = [...siblings, "✍️ 键入新高管级出海视觉文案规划段落 (点击即可修改)..."];
     setSiblings(next);

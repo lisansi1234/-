@@ -342,6 +342,21 @@ app.post("/api/save-defaults", (req, res) => {
   }
 });
 
+// API Endpoint to yield raw persisted defaults directly from server-side files at runtime
+app.get("/api/get-defaults", (req, res) => {
+  try {
+    const filePath = path.join(process.cwd(), "src", "data", "persisted_defaults.json");
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf-8");
+      return res.json(JSON.parse(data));
+    }
+    return res.json({});
+  } catch (err: any) {
+    console.error("Get defaults error:", err);
+    return res.status(500).json({ error: "Failed to load up-to-date defaults from storage" });
+  }
+});
+
 // Configure Vite or Static Asset File Serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

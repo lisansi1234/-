@@ -21,6 +21,7 @@ import { DesignBrief } from "./types";
 import DeletableText from "./components/DeletableText";
 import DeletableWrapper from "./components/DeletableWrapper";
 import persistedDefaults from "./data/persisted_defaults.json";
+import { setGlobalDynamicDefaults } from "./components/AnkerBlueListingSystem";
 
 interface SiteBlock {
   id: string;
@@ -191,6 +192,43 @@ export default function App() {
     if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
     return DEFAULT_VISIBLE_SECTIONS;
   });
+
+  // Load dynamic defaults from server-side JSON storage on mount and dispatch to all components
+  useEffect(() => {
+    fetch("/api/get-defaults")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.localStorageDump) {
+          // Store globally so that components loading later can also read it instantly
+          (window as any).__loadedDynamicDefaults = data;
+          setGlobalDynamicDefaults(data);
+
+          // Dispatch to fast-sync text, widgets, projects & image layers
+          window.dispatchEvent(new CustomEvent("ae_dynamic_defaults_loaded", { detail: data }));
+
+          // Update local App theme parameters safely
+          const hasLocalSections = localStorage.getItem("ae_visible_sections_v3") !== null;
+          if (!hasLocalSections) {
+            const serverSections = (data.localStorageDump as any)?.["ae_visible_sections_v3"];
+            if (serverSections) {
+              const parsed = typeof serverSections === "string" ? JSON.parse(serverSections) : serverSections;
+              setVisibleSections(parsed);
+            }
+          }
+
+          const hasLocalAccent = localStorage.getItem("ae_theme_accent") !== null;
+          if (!hasLocalAccent) {
+            const serverAccent = (data.localStorageDump as any)?.ae_theme_accent;
+            if (serverAccent && ACCENT_PRESETS[serverAccent]) {
+              setThemeAccent(serverAccent as any);
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("API dynamic defaults fetch bypassed or failed (expected if static):", err);
+      });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("ae_is_edit_mode_active_v3", String(isEditMode));

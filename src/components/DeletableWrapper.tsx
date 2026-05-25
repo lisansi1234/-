@@ -55,6 +55,36 @@ export default function DeletableWrapper({
     };
   }, [localStorageKey]);
 
+  // Synchronize state dynamically when the live server defaults are retrieved/fetched
+  useEffect(() => {
+    const handleDefaultsLoaded = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const data = customEvent.detail;
+      if (data && data.localStorageDump) {
+        const localDel = localStorage.getItem(`${localStorageKey}_deleted`);
+        if (localDel === null) {
+          const persisted = data.localStorageDump[`${localStorageKey}_deleted`];
+          if (persisted !== undefined) {
+            setIsDeleted(persisted === true || persisted === "true");
+          }
+        }
+      }
+    };
+
+    window.addEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+
+    // If global files already fetched in the background, update immediately
+    const globalWin = (window as any);
+    if (globalWin.__loadedDynamicDefaults) {
+      const fakeEvent = new CustomEvent("ae_dynamic_defaults_loaded", { detail: globalWin.__loadedDynamicDefaults });
+      handleDefaultsLoaded(fakeEvent);
+    }
+
+    return () => {
+      window.removeEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+    };
+  }, [localStorageKey]);
+
   if (isDeleted) return null;
 
   const handleDelete = (e: React.MouseEvent) => {

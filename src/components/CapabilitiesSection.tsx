@@ -67,6 +67,36 @@ export default function CapabilitiesSection({ isEditMode }: CapabilitiesSectionP
     };
   }, []);
 
+  // Synchronize state dynamically when the live server defaults are retrieved/fetched
+  useEffect(() => {
+    const handleDefaultsLoaded = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const data = customEvent.detail;
+      if (data && data.localStorageDump) {
+        const saved = localStorage.getItem(localStorageKey);
+        if (saved === null) {
+          const persisted = data.localStorageDump[localStorageKey];
+          if (persisted) {
+            setCapabilities(typeof persisted === "string" ? JSON.parse(persisted) : persisted);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+
+    // If global defaults already loaded, parse immediately
+    const globalWin = (window as any);
+    if (globalWin.__loadedDynamicDefaults) {
+      const fakeEvent = new CustomEvent("ae_dynamic_defaults_loaded", { detail: globalWin.__loadedDynamicDefaults });
+      handleDefaultsLoaded(fakeEvent);
+    }
+
+    return () => {
+      window.removeEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+    };
+  }, []);
+
   const handleDeleteCard = (cardId: string) => {
     setCapabilities(prev => prev.filter(item => item.id !== cardId));
   };

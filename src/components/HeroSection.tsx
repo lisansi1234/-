@@ -49,6 +49,36 @@ export default function HeroSection({ onExploreClick, isEditMode }: HeroSectionP
     };
   }, [partners]);
 
+  // Synchronize state dynamically when the live server defaults are retrieved/fetched
+  useEffect(() => {
+    const handleDefaultsLoaded = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const data = customEvent.detail;
+      if (data && data.localStorageDump) {
+        const saved = localStorage.getItem(partnersLocalStorageKey);
+        if (saved === null) {
+          const persisted = data.localStorageDump[partnersLocalStorageKey];
+          if (persisted) {
+            setPartners(typeof persisted === "string" ? JSON.parse(persisted) : persisted);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+
+    // If global defaults already loaded, parse immediately
+    const globalWin = (window as any);
+    if (globalWin.__loadedDynamicDefaults) {
+      const fakeEvent = new CustomEvent("ae_dynamic_defaults_loaded", { detail: globalWin.__loadedDynamicDefaults });
+      handleDefaultsLoaded(fakeEvent);
+    }
+
+    return () => {
+      window.removeEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+    };
+  }, []);
+
   // Dispatch an unsaved changes event if partners differ from persistent storage
   useEffect(() => {
     const saved = localStorage.getItem(partnersLocalStorageKey);

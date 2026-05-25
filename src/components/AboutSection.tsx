@@ -81,6 +81,43 @@ export default function AboutSection({
     };
   }, []);
 
+  // Synchronize state dynamically when the live server defaults are retrieved/fetched
+  useEffect(() => {
+    const handleDefaultsLoaded = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      const data = customEvent.detail;
+      if (data && data.localStorageDump) {
+        const savedNodes = localStorage.getItem(sitemapLocalStorageKey);
+        if (savedNodes === null) {
+          const persisted = data.localStorageDump[sitemapLocalStorageKey];
+          if (persisted) {
+            setSiteMapNodes(typeof persisted === "string" ? JSON.parse(persisted) : persisted);
+          }
+        }
+        const savedStacks = localStorage.getItem(techStackLocalStorageKey);
+        if (savedStacks === null) {
+          const persisted = data.localStorageDump[techStackLocalStorageKey];
+          if (persisted) {
+            setTechStacks(typeof persisted === "string" ? JSON.parse(persisted) : persisted);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+
+    // If global defaults already loaded, parse immediately
+    const globalWin = (window as any);
+    if (globalWin.__loadedDynamicDefaults) {
+      const fakeEvent = new CustomEvent("ae_dynamic_defaults_loaded", { detail: globalWin.__loadedDynamicDefaults });
+      handleDefaultsLoaded(fakeEvent);
+    }
+
+    return () => {
+      window.removeEventListener("ae_dynamic_defaults_loaded", handleDefaultsLoaded);
+    };
+  }, []);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!brandName.trim() || !contactEmail.trim()) return;

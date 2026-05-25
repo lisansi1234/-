@@ -890,6 +890,70 @@ export default function AnkerBlueListingSystem({
     });
   };
 
+  const sendWorkspaceToBackendPermanentSave = async (
+    customProjectsList: any, 
+    customCategories: any, 
+    customCurrentCategory?: string, 
+    customActiveProjectId?: number, 
+    customImagesMap?: any
+  ) => {
+    try {
+      const localStorageDump: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("ae_") || key.startsWith("anker_"))) {
+          const val = localStorage.getItem(key);
+          if (val !== null) {
+            localStorageDump[key] = val;
+          }
+        }
+      }
+
+      // Explicitly override with the passed values to prevent race conditions or async stale state
+      localStorageDump["anker_blue_projects_v2"] = JSON.stringify(customProjectsList);
+      localStorageDump["anker_blue_categories_v2"] = JSON.stringify(customCategories);
+      if (customCurrentCategory) {
+        localStorageDump["anker_current_category_v2"] = customCurrentCategory;
+      }
+      if (customActiveProjectId !== undefined) {
+        localStorageDump["anker_active_project_id_v2"] = String(customActiveProjectId);
+      }
+
+      // Collect images
+      let dbImagesMap = customImagesMap;
+      if (!dbImagesMap) {
+        dbImagesMap = {};
+        const dbKeys = await getAllIndexedDBKeys();
+        await Promise.all(
+          dbKeys.map(async (key) => {
+            const base64 = await getFromIndexedDB(key);
+            if (base64) {
+              dbImagesMap[key] = base64;
+            }
+          })
+        );
+      }
+
+      const response = await fetch("/api/save-defaults", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ localStorageDump, dbImagesMap })
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        console.log("Automatically synchronized imported/committed backup to server sources successfully:", resData);
+        addToast(
+          "success",
+          "🚀 永久源码固化成功 / Permanently Written to Codebase",
+          "已成功将您导入的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您下一次重新部署到 Vercel 后，世界上任何电脑和手机打开您的网址都将默认显示完美的本站定制内容，无需手动导入恢复！"
+        );
+      }
+    } catch (err) {
+      console.warn("Backend persistent write skipped or failed (expected if not in local sandbox sandbox mode):", err);
+    }
+  };
+
   const handleImportWorkspaceJson = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -943,6 +1007,15 @@ export default function AnkerBlueListingSystem({
                 "📥 备份无损克隆成功 / Recovery Success", 
                 `恭喜！成功写入 ${keysToSave.length} 张原画原图！文字内容、微调排版和无损多媒体细节已达到 100% 物理对齐状态！`
               );
+
+              // Instantly fire automatic filesystem backup synchronization for frictionless Vercel deployment!
+              sendWorkspaceToBackendPermanentSave(
+                backupData.projectsList,
+                backupData.categories,
+                backupData.currentCategory,
+                backupData.activeProjectId,
+                imagesToSave
+              );
             }).catch(writeErr => {
               removeToast(importToastId);
               console.error(writeErr);
@@ -981,6 +1054,15 @@ export default function AnkerBlueListingSystem({
               "success", 
               "📥 备份还原成功 (不含嵌入图片数据)", 
               "排版基础骨架与文案大纲已成功还原！检测到该备份不含高清图片，如有破损图片，请双击对应卡片重新上传高清原件即可。"
+            );
+
+            // Synchronize skeleton to local code repository defaults
+            sendWorkspaceToBackendPermanentSave(
+              backupData.projectsList,
+              backupData.categories,
+              backupData.currentCategory,
+              backupData.activeProjectId,
+              {}
             );
           }
         } else {

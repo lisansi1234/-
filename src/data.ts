@@ -1,4 +1,7 @@
 import { CaseStudy, SiteMapNode } from "./types";
+import regeneratedImage1779358129423 from "./assets/images/regenerated_image_1779358129423.jpg";
+import regeneratedImage1779358241231 from "./assets/images/regenerated_image_1779358241231.jpg";
+import regeneratedImage1779358272739 from "./assets/images/regenerated_image_1779358272739.jpg";
 
 export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
   {
@@ -14,7 +17,7 @@ export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
     ],
     technicalTerm: "Thermal Backlight / 逆光环形框",
     materials: ["CNC-6061 Anodized Aluminum 阳极氧化铝", "Optic Glass Enclosure 光学钢化玻璃", "V-0 Flame-Retardant Polymer V0防爆高聚物"],
-    imageUrl: "/src/assets/images/regenerated_image_1779358129423.jpg"
+    imageUrl: regeneratedImage1779358129423
   },
   {
     id: "aero-capsule",
@@ -29,7 +32,7 @@ export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
     ],
     technicalTerm: "Macro Depth / 宏观景深分离",
     materials: ["Translucent Toughened Silica 钢化透明硅胶", "Beryllium-Coated Film 高附着铍涂层", "Sputtered Aurum Contacts 溅射金触点"],
-    imageUrl: "/src/assets/images/regenerated_image_1779358241231.jpg"
+    imageUrl: regeneratedImage1779358241231
   },
   {
     id: "titan-rig",
@@ -44,7 +47,7 @@ export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
     ],
     technicalTerm: "Cinematic Laser Scan / 激光扫掠",
     materials: ["Laser-Welded Spring Steel 激光焊接绷钢", "Poron Polyurethane Compound 进口Poron发泡消音棉", "High-Density PBT Keycaps 高克重PBT热升华键帽"],
-    imageUrl: "/src/assets/images/regenerated_image_1779358272739.jpg"
+    imageUrl: regeneratedImage1779358272739
   }
 ];
 

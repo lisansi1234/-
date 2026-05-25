@@ -404,18 +404,23 @@ export default function App() {
             </button>
           )}
 
-          {/* Mode Switch Button */}
+          {/* Mode Switch Button (Shrunk to a sleek round circle dot) */}
           <button
             type="button"
             onClick={handleToggleEditMode}
-            className={`px-4 py-1.5 rounded-lg text-[9.5px] font-mono uppercase tracking-widest cursor-pointer border transition-all flex items-center gap-2 ${
+            className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border transition-all relative group shrink-0 ${
               isEditMode 
-                ? "bg-[#FF6B00] text-black border-[#FF6B00] font-bold shadow-[0_0_15px_rgba(255,107,0,0.3)] animate-pulse shadow-md" 
+                ? "bg-[#FF6B00] text-black border-[#FF6B00] font-bold shadow-[0_0_15px_rgba(255,107,0,0.4)] animate-pulse shadow-md" 
                 : "bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border-white/15"
             }`}
+            title={isEditMode ? "编辑模式已开启 / 双击文字自定义 (Double click text to edit)" : "🛠️ 开启排版增删与微调模式 / Toggle Edit Mode"}
           >
             {isEditMode ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-            {isEditMode ? "● EDIT MODE ACTIVE / 变更为预览" : "🛠️ EDIT & DELETE LAYOUTS / 开启大板块增删与微调模式"}
+            
+            {/* Elegant tool action hover tooltip */}
+            <span className="absolute right-0 top-11 scale-0 group-hover:scale-100 transition-all origin-top-right whitespace-nowrap bg-zinc-950 border border-white/10 text-white font-mono font-bold text-[8.5px] py-1.5 px-3 rounded-lg shadow-xl z-[100] pointer-events-none tracking-widest leading-none">
+              {isEditMode ? "● ACTIVE MODE: 正在编辑 / EDITING" : "🛠️ EDIT & DELETE: 开启排版微调与增删"}
+            </span>
           </button>
         </div>
       </div>
@@ -637,6 +642,8 @@ export default function App() {
               loadPresetProduct={loadPresetProduct}
               isEditMode={isEditMode}
               setIsEditMode={setIsEditMode}
+              isVerified={isVerified}
+              onOpenLoginModal={() => setShowLoginModal(true)}
               visibleSections={visibleSections}
               toggleSection={toggleSection}
             />

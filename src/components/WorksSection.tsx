@@ -53,6 +53,8 @@ export default function WorksSection({
   loadPresetProduct,
   isEditMode,
   setIsEditMode,
+  isVerified,
+  onOpenLoginModal,
   visibleSections = ["works_banner", "works_showcase", "works_sandbox", "works_aplus"],
   toggleSection = () => {}
 }: any) {
@@ -64,6 +66,8 @@ export default function WorksSection({
         <AnkerBlueListingSystem 
           isEditMode={isEditMode} 
           setIsEditMode={setIsEditMode}
+          isVerified={isVerified}
+          onOpenLoginModal={onOpenLoginModal}
           visibleSections={visibleSections}
           toggleSection={toggleSection}
           productName={productName}

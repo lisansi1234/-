@@ -22,7 +22,8 @@ import {
   ChevronRight,
   DownloadCloud,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import DeletableText from "./DeletableText";
@@ -161,6 +162,8 @@ interface AnkerBlueListingSystemProps {
   setAplusLayoutType?: (type: "basic" | "premium") => void;
   handleGenerateDesign?: (e: any) => void;
   loadPresetProduct?: (key: "power" | "earbuds" | "keyboard") => void;
+  isVerified?: boolean;
+  onOpenLoginModal?: () => void;
 }
 
 interface ProjectSpec {
@@ -569,7 +572,9 @@ export default function AnkerBlueListingSystem({
   aplusLayoutType,
   setAplusLayoutType,
   handleGenerateDesign,
-  loadPresetProduct
+  loadPresetProduct,
+  isVerified = false,
+  onOpenLoginModal = () => {}
 }: AnkerBlueListingSystemProps) {
   
   // --- STATE PERSISTENCE IN LOCALSTORAGE ---
@@ -1925,10 +1930,15 @@ Module #${i + 1}: ${b.title}
 
                       {/* DYNAMIC HOVER OVERLAY */}
                       <div 
-                        className="absolute bottom-0 left-0 right-0 h-[65%] bg-[#070b14]/98 border-t border-[#0066ff]/20 rounded-b-2xl backdrop-blur-xl p-5 z-[60] flex flex-col justify-between transition-all duration-300 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transform translate-y-2 group-hover:translate-y-0 select-text overflow-y-auto"
+                        className="absolute bottom-0 left-0 right-0 h-[65%] bg-[#070b14]/98 border-t border-[#0066ff]/20 rounded-b-2xl backdrop-blur-xl p-5 z-[60] flex flex-col justify-between transition-all duration-300 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transform translate-y-2 group-hover:translate-y-0 select-text overflow-y-auto cursor-pointer"
                         onClick={(e) => {
-                          e.stopPropagation();
+                          const target = e.target as HTMLElement;
+                          if (target.closest('[contenteditable="true"]') || target.closest('.edit-control') || target.closest('button') || target.closest('input')) {
+                            e.stopPropagation();
+                            return;
+                          }
                           setActiveProjectId(p.id);
+                          setSubView("detail");
                         }}
                       >
                         <div className="space-y-3.5 text-left">
@@ -2170,6 +2180,25 @@ Module #${i + 1}: ${b.title}
                   <span className="text-[9px] text-[#00d2ff] font-bold tracking-widest uppercase font-mono">
                     Double-click Image to Customize
                   </span>
+                </div>
+
+                {/* On mobile: Quick transition button to A+ Sandbox */}
+                <div className="lg:hidden w-full pt-1.5 pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubView("sandbox");
+                      addToast(
+                        "success", 
+                        "已进入沙盒 / Custom Sandbox Active", 
+                        `已成功进入《${activeProject.title}》的排版重构沙盒面板！`
+                      );
+                    }}
+                    className="w-full py-3 bg-gradient-to-r from-[#0066ff] to-[#00d2ff] hover:opacity-95 active:scale-95 text-white rounded-xl text-xs font-mono font-bold tracking-wider uppercase shadow-lg shadow-[#0066ff]/20 transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/5"
+                  >
+                    <Layers className="w-4 h-4 text-white" />
+                    <span>进入 A+ 互动沙盒（手机特快通道）</span>
+                  </button>
                 </div>
               </div>
 
@@ -3605,15 +3634,33 @@ Module #${i + 1}: ${b.title}
           </div>
         </div>
 
-        {/* Website Function Collection Button / 呼出控制大台 */}
+         {/* Website Function Collection Button / 呼出控制大台 - Optimized as a floating round circle dot (小圆点) */}
         <button 
           type="button"
-          onClick={() => setIsAnkerPanelOpen(!isAnkerPanelOpen)}
-          className="px-4 py-2.5 rounded-full bg-gradient-to-r from-[#0066ff] to-[#00d2ff] hover:shadow-[0_0_20px_rgba(0,102,255,0.4)] active:scale-95 text-white shadow-xl flex items-center space-x-2 transition-all cursor-pointer border border-white/10"
-          title="网站功能修改中心 (Website Cockpit)"
+          onClick={() => {
+            if (isVerified) {
+              setIsAnkerPanelOpen(!isAnkerPanelOpen);
+            } else {
+              onOpenLoginModal();
+            }
+          }}
+          className={`w-11 h-11 rounded-full flex items-center justify-center ${
+            isVerified 
+              ? "bg-[#0066ff] hover:bg-[#00d2ff] hover:shadow-[0_0_20px_rgba(0,102,255,0.4)] text-white" 
+              : "bg-amber-600 hover:bg-orange-500 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white"
+          } active:scale-95 shadow-xl transition-all cursor-pointer border border-white/10 group/ankertrigger relative shrink-0`}
+          title={isVerified ? "网站功能修改中心 (Website Cockpit)" : "请登录管理员账号解锁此修改中心 (Login to Unlock)"}
         >
-          <Settings className={`w-4 h-4 transition-transform duration-500 ${isAnkerPanelOpen ? 'rotate-90 text-[#00d2ff]' : 'text-white'}`} />
-          <span className="text-[10.5px] font-bold font-mono tracking-wider">修改网站功能合集</span>
+          {isVerified ? (
+            <Settings className={`w-4.5 h-4.5 transition-transform duration-500 ${isAnkerPanelOpen ? 'rotate-90 text-[#00d2ff]' : 'text-white'}`} />
+          ) : (
+            <Lock className="w-4.5 h-4.5 text-white animate-pulse" />
+          )}
+
+          {/* Elegant floating tooltip matching the controller tooltips */}
+          <span className="absolute right-0 bottom-14 scale-0 group-hover/ankertrigger:scale-100 transition-all origin-bottom-right whitespace-nowrap bg-zinc-950 border border-white/10 text-white font-mono font-bold text-[8.5px] py-1.5 px-3 rounded-lg shadow-xl z-[9999] pointer-events-none tracking-widest leading-none">
+            {isVerified ? "⚙️ 网站功能修改合集 / COCKPIT" : "🔒 修改网站功能合集 [未授权]"}
+          </span>
         </button>
       </div>
 

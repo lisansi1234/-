@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -9,7 +10,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "150mb" }));
+app.use(express.urlencoded({ limit: "150mb", extended: true }));
 
 // Helper function to lazy-initialize GoogleGenAI
 let ai: GoogleGenAI | null = null;
@@ -302,6 +304,41 @@ app.post("/api/portfolio/chat", async (req, res) => {
   } catch (error: any) {
     console.error("Gemini Chat Error:", error);
     return res.status(500).json({ error: error.message || "Failed to communicate with AI Assistant" });
+  }
+});
+
+// API Endpoint to write current client layout and text customizations directly into source code files
+app.post("/api/save-defaults", (req, res) => {
+  try {
+    const { localStorageDump, dbImagesMap } = req.body;
+    if (!localStorageDump) {
+      return res.status(400).json({ error: "Missing layout customization payload" });
+    }
+
+    const dataDir = path.join(process.cwd(), "src", "data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    const payload = {
+      localStorageDump,
+      dbImagesMap: dbImagesMap || {}
+    };
+
+    fs.writeFileSync(
+      path.join(dataDir, "persisted_defaults.json"),
+      JSON.stringify(payload, null, 2),
+      "utf-8"
+    );
+
+    console.log("Successfully persisted active layout state to /src/data/persisted_defaults.json!");
+    return res.json({ 
+      success: true, 
+      message: "Custom database defaults committed directly to local repository! (成功将最新站存数据永久淬炼进本地仓库代码)" 
+    });
+  } catch (err: any) {
+    console.error("Save defaults error:", err);
+    return res.status(500).json({ error: err.message || "Failed to commit layout changes to repository." });
   }
 });
 

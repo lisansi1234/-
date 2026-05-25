@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import FadingVideo from "./FadingVideo";
 import DeletableText from "./DeletableText";
 import { Trash2, Plus } from "lucide-react";
+import persistedDefaults from "../data/persisted_defaults.json";
 
 interface CapabilityItem {
   id: string;
@@ -44,7 +45,10 @@ export default function CapabilitiesSection({ isEditMode }: CapabilitiesSectionP
   
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(() => {
     const saved = localStorage.getItem(localStorageKey);
-    return saved ? JSON.parse(saved) : DEFAULT_CAPABILITIES;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[localStorageKey];
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return DEFAULT_CAPABILITIES;
   });
 
   useEffect(() => {

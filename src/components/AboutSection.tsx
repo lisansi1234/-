@@ -3,6 +3,7 @@ import { Cpu, TrendingUp, CheckCircle, Trash2, Plus } from "lucide-react";
 import { TECHNICAL_SITE_MAP } from "../data";
 import { DesignBrief, SiteMapNode } from "../types";
 import DeletableText from "./DeletableText";
+import persistedDefaults from "../data/persisted_defaults.json";
 
 interface AboutSectionProps {
   currentBrief: DesignBrief | null;
@@ -42,14 +43,20 @@ export default function AboutSection({
   const sitemapLocalStorageKey = "ae_sitemap_list_v3";
   const [siteMapNodes, setSiteMapNodes] = useState<SiteMapNode[]>(() => {
     const saved = localStorage.getItem(sitemapLocalStorageKey);
-    return saved ? JSON.parse(saved) : TECHNICAL_SITE_MAP;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[sitemapLocalStorageKey];
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return TECHNICAL_SITE_MAP;
   });
 
   // Dynamic Tech Stack list state
   const techStackLocalStorageKey = "ae_techstack_list_v3";
   const [techStacks, setTechStacks] = useState<TechStackItem[]>(() => {
     const saved = localStorage.getItem(techStackLocalStorageKey);
-    return saved ? JSON.parse(saved) : DEFAULT_TECH_STACKS;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[techStackLocalStorageKey];
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return DEFAULT_TECH_STACKS;
   });
 
   useEffect(() => {

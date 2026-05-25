@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import FadingVideo from "./FadingVideo";
 import DeletableText from "./DeletableText";
 import { Trash2, Plus } from "lucide-react";
+import persistedDefaults from "../data/persisted_defaults.json";
 
 interface HeroSectionProps {
   onExploreClick: () => void;
@@ -31,7 +32,10 @@ export default function HeroSection({ onExploreClick, isEditMode }: HeroSectionP
   const partnersLocalStorageKey = "ae_hero_partners_v3";
   const [partners, setPartners] = useState<string[]>(() => {
     const saved = localStorage.getItem(partnersLocalStorageKey);
-    return saved ? JSON.parse(saved) : DEFAULT_PARTNERS;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[partnersLocalStorageKey];
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return DEFAULT_PARTNERS;
   });
 
   // Save partners ONLY when commit save event is received

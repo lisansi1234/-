@@ -20,6 +20,7 @@ import CapabilitiesSection from "./components/CapabilitiesSection";
 import { DesignBrief } from "./types";
 import DeletableText from "./components/DeletableText";
 import DeletableWrapper from "./components/DeletableWrapper";
+import persistedDefaults from "./data/persisted_defaults.json";
 
 interface SiteBlock {
   id: string;
@@ -51,7 +52,110 @@ const DEFAULT_VISIBLE_SECTIONS = [
   "about_stack"
 ];
 
+interface AccentColor {
+  id: string;
+  name: string;
+  hex: string;
+  primaryClass: string;
+  hoverBgClass: string;
+  bgClass: string;
+  bgLowOpacity: string;
+  borderClass: string;
+  borderLowOpacity: string;
+  gradientClass: string;
+  pingBg: string;
+  textLight: string;
+  textDark: string;
+  shadowClass: string;
+}
+
+const ACCENT_PRESETS: Record<string, AccentColor> = {
+  blue: {
+    id: "blue",
+    name: "安克科技蓝 (Anker Blue)",
+    hex: "#0066ff",
+    primaryClass: "text-[#0066ff]",
+    hoverBgClass: "hover:bg-[#0066ff]/20",
+    bgClass: "bg-[#0066ff]",
+    bgLowOpacity: "bg-[#0066ff]/10",
+    borderClass: "border-[#0066ff]",
+    borderLowOpacity: "border-[#0066ff]/20",
+    gradientClass: "from-[#0066ff] to-[#00d2ff]",
+    pingBg: "bg-[#0066ff]",
+    textLight: "text-[#00d2ff]",
+    textDark: "text-blue-500",
+    shadowClass: "shadow-[0_0_15px_rgba(0,102,255,0.4)]"
+  },
+  orange: {
+    id: "orange",
+    name: "正浩极奢橙 (AeroCore Orange)",
+    hex: "#FF6B00",
+    primaryClass: "text-[#FF6B00]",
+    hoverBgClass: "hover:bg-[#FF6B00]/20",
+    bgClass: "bg-[#FF6B00]",
+    bgLowOpacity: "bg-[#FF6B00]/10",
+    borderClass: "border-[#FF6B00]",
+    borderLowOpacity: "border-[#FF6B00]/20",
+    gradientClass: "from-[#FF6B00] to-[#FF9E00]",
+    pingBg: "bg-[#FF6B00]",
+    textLight: "text-[#FF6B00]",
+    textDark: "text-orange-500",
+    shadowClass: "shadow-[0_0_15px_rgba(255,107,0,0.4)]"
+  },
+  teal: {
+    id: "teal",
+    name: "生态大牌绿 (EcoFlow Teal)",
+    hex: "#00E5FF",
+    primaryClass: "text-[#00E5FF]",
+    hoverBgClass: "hover:bg-[#00E5FF]/20",
+    bgClass: "bg-[#00E5FF]",
+    bgLowOpacity: "bg-[#00E5FF]/10",
+    borderClass: "border-[#00E5FF]",
+    borderLowOpacity: "border-[#00E5FF]/20",
+    gradientClass: "from-[#00E5FF] to-emerald-400",
+    pingBg: "bg-[#00E5FF]",
+    textLight: "text-[#00E5FF]",
+    textDark: "text-teal-400",
+    shadowClass: "shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+  },
+  purple: {
+    id: "purple",
+    name: "智造未来紫 (Cyber Purple)",
+    hex: "#9e33ff",
+    primaryClass: "text-[#9e33ff]",
+    hoverBgClass: "hover:bg-[#9e33ff]/20",
+    bgClass: "bg-[#9e33ff]",
+    bgLowOpacity: "bg-[#9e33ff]/10",
+    borderClass: "border-[#9e33ff]",
+    borderLowOpacity: "border-[#9e33ff]/20",
+    gradientClass: "from-[#9e33ff] to-pink-500",
+    pingBg: "bg-[#9e33ff]",
+    textLight: "text-[#d946ef]",
+    textDark: "text-purple-500",
+    shadowClass: "shadow-[0_0_15px_rgba(158,51,255,0.4)]"
+  }
+};
+
 export default function App() {
+  // Theme Color customization defaults to Anker Blue for instant customer satisfaction!
+  const [themeAccent, setThemeAccent] = useState<"blue" | "orange" | "teal" | "purple">(() => {
+    const val = localStorage.getItem("ae_theme_accent") || (persistedDefaults?.localStorageDump as any)?.ae_theme_accent;
+    return (val as any) || "blue";
+  });
+
+  const activeAccent = ACCENT_PRESETS[themeAccent] || ACCENT_PRESETS.blue;
+
+  useEffect(() => {
+    const handleAccentChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail && ACCENT_PRESETS[customEvent.detail]) {
+        setThemeAccent(customEvent.detail as any);
+      }
+    };
+    window.addEventListener("ae_theme_accent_changed", handleAccentChange);
+    return () => window.removeEventListener("ae_theme_accent_changed", handleAccentChange);
+  }, []);
+  
   // Navigation & Page routing tabs
   const [activeTab, setActiveTab] = useState("works");
   
@@ -82,7 +186,10 @@ export default function App() {
 
   const [visibleSections, setVisibleSections] = useState<string[]>(() => {
     const saved = localStorage.getItem("ae_visible_sections_v3");
-    return saved ? JSON.parse(saved) : DEFAULT_VISIBLE_SECTIONS;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[ "ae_visible_sections_v3" ];
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return DEFAULT_VISIBLE_SECTIONS;
   });
 
   useEffect(() => {
@@ -352,16 +459,25 @@ export default function App() {
       
       {/* Decorative High-Contrast Glow Orbs */}
       <div className="absolute top-0 left-0 w-full h-[500px] pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-1/4 left-1/4 w-[600px] h-[600px] bg-gradient-to-br from-[#FF6B00]/10 to-transparent rounded-full blur-[160px] animate-gradient-glow"></div>
+        <div 
+          className="absolute -top-1/4 left-1/4 w-[600px] h-[600px] rounded-full blur-[160px] opacity-20 duration-1000 transition-all"
+          style={{ backgroundImage: `linear-gradient(to bottom right, ${activeAccent.hex}, transparent)` }}
+        ></div>
         <div className="absolute top-1/4 right-1/4 w-[500px] h-[400px] bg-gradient-to-tr from-[#9e33ff]/5 to-transparent rounded-full blur-[140px] opacity-70"></div>
       </div>
 
       {/* Dynamic Global Action Control Bar */}
-      <div className="bg-[#0b0c10] border-b border-orange-500/20 px-6 py-3.5 relative z-40 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="bg-[#0b0c10] border-b border-white/10 px-6 py-3.5 relative z-40 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FF6B00] animate-ping"></span>
+          <span 
+            className="w-2.5 h-2.5 rounded-full animate-ping duration-1000 transition-all"
+            style={{ backgroundColor: activeAccent.hex }}
+          ></span>
           <div className="text-left">
-            <span className="text-[10px] uppercase font-mono tracking-widest text-[#FF6B00] font-bold block">
+            <span 
+              className="text-[10px] uppercase font-mono tracking-widest font-bold block"
+              style={{ color: activeAccent.hex }}
+            >
               <DeletableText
                 id="control_bar_title_v2"
                 defaultText="AEROCORE GLOBAL EDITOR // 电商视觉设计师自研画册控制台"
@@ -379,6 +495,36 @@ export default function App() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+          {/* --- 自由修改全站主色调 / Customize Theme Color --- */}
+          {isEditMode && (
+            <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/5 px-2 py-1.5 rounded-xl shrink-0">
+              <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest mr-1">🎨 自由定制全色调 / Theme:</span>
+              <div className="flex items-center gap-1.5">
+                {Object.values(ACCENT_PRESETS).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setThemeAccent(p.id as any);
+                      localStorage.setItem("ae_theme_accent", p.id);
+                      window.dispatchEvent(new CustomEvent("ae_theme_accent_changed", { detail: p.id }));
+                    }}
+                    className="w-4.5 h-4.5 rounded-full border transition-all cursor-pointer relative group flex items-center justify-center p-0"
+                    style={{ backgroundColor: p.hex, borderColor: themeAccent === p.id ? '#ffffff' : 'rgba(255,255,255,0.15)' }}
+                    title={p.name}
+                  >
+                    {themeAccent === p.id && (
+                      <span className="w-1.5 h-1.5 bg-black rounded-full"></span>
+                    )}
+                    <span className="absolute bottom-6 left-1/2 -translate-x-1/2 scale-0 group-hover:scale-100 transition-all text-[8px] font-mono whitespace-nowrap bg-zinc-950 border border-white/10 px-1.5 py-0.5 rounded text-white z-[90]">
+                      {p.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Save button */}
           {hasUnsavedChanges && (
             <button
@@ -408,11 +554,13 @@ export default function App() {
           <button
             type="button"
             onClick={handleToggleEditMode}
-            className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border transition-all relative group shrink-0 ${
-              isEditMode 
-                ? "bg-[#FF6B00] text-black border-[#FF6B00] font-bold shadow-[0_0_15px_rgba(255,107,0,0.4)] animate-pulse shadow-md" 
-                : "bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border-white/15"
-            }`}
+            className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border transition-all relative group shrink-0`}
+            style={{ 
+              backgroundColor: isEditMode ? activeAccent.hex : "rgba(255,255,255,0.05)",
+              color: isEditMode ? "#000000" : "rgba(255,255,255,0.8)",
+              borderColor: isEditMode ? activeAccent.hex : "rgba(255,255,255,0.15)",
+              boxShadow: isEditMode ? `0 0 15px ${activeAccent.hex}66` : "none"
+            }}
             title={isEditMode ? "编辑模式已开启 / 双击文字自定义 (Double click text to edit)" : "🛠️ 开启排版增删与微调模式 / Toggle Edit Mode"}
           >
             {isEditMode ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
@@ -429,7 +577,7 @@ export default function App() {
       {isEditMode && (
         <div className="bg-zinc-950 border-b border-white/5 px-6 py-4 relative z-30 animate-fade-in text-left">
           <div className="flex items-center gap-2 mb-2.5">
-            <Settings className="w-4.5 h-4.5 text-[#FF6B00]" />
+            <Settings className="w-4.5 h-4.5" style={{ color: activeAccent.hex }} />
             <span className="text-[9.5px] font-mono text-white/40 uppercase tracking-widest font-bold">
               // STRUCTURE MAPPING / 精细控制各模块(层)的显示与隐藏 (可随意隐藏、删除或一键恢复):
             </span>
@@ -442,15 +590,19 @@ export default function App() {
                   key={block.id}
                   type="button"
                   onClick={() => toggleSection(block.id)}
-                  className={`p-2 rounded-lg border text-left text-[9px] font-mono transition-all cursor-pointer ${
-                    isVisible 
-                      ? "bg-zinc-900 border-[#FF6B00]/40 text-white" 
-                      : "bg-black/40 border-white/5 text-white/20 select-none opacity-45"
-                  }`}
+                  className={`p-2 rounded-lg border text-left text-[9px] font-mono transition-all cursor-pointer`}
+                  style={{
+                    backgroundColor: isVisible ? "var(--color-zinc-900)" : "rgba(0,0,0,0.4)",
+                    borderColor: isVisible ? `${activeAccent.hex}66` : "rgba(255,255,255,0.05)",
+                    color: isVisible ? "#ffffff" : "rgba(255,255,255,0.2)"
+                  }}
                 >
                   <div className="flex justify-between items-center font-bold">
                     <span>{block.badge}</span>
-                    <span className={`w-1.5 h-1.5 rounded-full ${isVisible ? "bg-[#FF6B00]" : "bg-white/10"}`}></span>
+                    <span 
+                      className={`w-1.5 h-1.5 rounded-full transition-all`}
+                      style={{ backgroundColor: isVisible ? activeAccent.hex : "rgba(255,255,255,0.1)" }}
+                    ></span>
                   </div>
                   <p className="text-[8px] opacity-60 truncate mt-1 leading-none">{block.label}</p>
                 </button>
@@ -464,7 +616,13 @@ export default function App() {
       <header className="sticky top-0 h-16 border-b border-white/5 backdrop-blur-md bg-zinc-950/70 z-30 px-6 lg:px-12 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <DeletableWrapper id="top_logo_icon_badge_v2" isEditMode={isEditMode} label="LOGO图标 / Logo Badge">
-            <div className="w-9 h-9 bg-gradient-to-br from-[#FF6B00] to-[#FF9E00] rounded-lg flex items-center justify-center font-bold text-black text-sm tracking-tighter shadow-[0_0_15px_rgba(255,107,0,0.4)] font-mono">
+            <div 
+              className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-black text-sm tracking-tighter font-mono transition-all duration-300"
+              style={{ 
+                backgroundImage: `linear-gradient(to bottom right, ${activeAccent.hex}, #ffffff88)`,
+                boxShadow: `0 0 15px ${activeAccent.hex}66`
+              }}
+            >
               <DeletableText id="top_logo_letter" defaultText="A" isEditMode={isEditMode} className="text-black font-extrabold" />
             </div>
           </DeletableWrapper>
@@ -473,8 +631,15 @@ export default function App() {
               <span className="font-display font-medium text-xs tracking-[0.25em] uppercase opacity-90 block">
                 <DeletableText id="top_logo_aerocore" defaultText="AEROCORE" isEditMode={isEditMode} className="text-white" />
               </span>
-              <span className="text-[9px] bg-[#FF6B00]/10 text-[#FF6B00] border border-[#FF6B00]/25 px-1.5 py-0.2 rounded font-mono uppercase font-bold">
-                <DeletableText id="top_logo_design" defaultText="DESIGN" isEditMode={isEditMode} className="text-[#FF6B00]" />
+              <span 
+                className="text-[9px] px-1.5 py-0.2 rounded font-mono uppercase font-bold border transition-all duration-300"
+                style={{ 
+                  backgroundColor: `${activeAccent.hex}1a`, 
+                  color: activeAccent.hex, 
+                  borderColor: `${activeAccent.hex}40`
+                }}
+              >
+                <DeletableText id="top_logo_design" defaultText="DESIGN" isEditMode={isEditMode} />
               </span>
             </div>
             <div className="text-[8px] text-white/40 uppercase tracking-widest font-mono hidden md:block">
@@ -488,14 +653,24 @@ export default function App() {
           <button 
             type="button"
             onClick={() => { setActiveTab("works"); setIsMobileMenuOpen(false); }} 
-            className={`cursor-pointer hover:text-white transition-all py-1.5 border-b-2 hover:border-white/20 ${activeTab === "works" ? "text-white border-[#FF6B00] font-bold" : "border-transparent"}`}
+            className={`cursor-pointer hover:text-white transition-all py-1.5 border-b-2 hover:border-white/20`}
+            style={{ 
+              color: activeTab === "works" ? "#ffffff" : "rgba(255,255,255,0.5)", 
+              borderColor: activeTab === "works" ? activeAccent.hex : "transparent",
+              fontWeight: activeTab === "works" ? "bold" : "normal"
+            }}
           >
             Works / 作品
           </button>
           <button 
             type="button"
             onClick={() => { setActiveTab("about"); setIsMobileMenuOpen(false); }} 
-            className={`cursor-pointer hover:text-white transition-all py-1.5 border-b-2 hover:border-white/20 ${activeTab === "about" ? "text-white border-[#FF6B00] font-bold" : "border-transparent"}`}
+            className={`cursor-pointer hover:text-white transition-all py-1.5 border-b-2 hover:border-white/20`}
+            style={{ 
+              color: activeTab === "about" ? "#ffffff" : "rgba(255,255,255,0.5)", 
+              borderColor: activeTab === "about" ? activeAccent.hex : "transparent",
+              fontWeight: activeTab === "about" ? "bold" : "normal"
+            }}
           >
             About / 关于我
           </button>
@@ -503,8 +678,18 @@ export default function App() {
 
         {/* Global Regional Status Monitor (Desktop only) */}
         <div className="hidden lg:flex items-center gap-3 text-[10px] text-white/40 font-mono">
-          <span className="flex items-center gap-1.5 bg-[#FF6B00]/10 text-[#FF6B00] border border-[#FF6B00]/20 rounded-full px-2.5 py-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#FF6B00] animate-pulse"></span>
+          <span 
+            className="flex items-center gap-1.5 border rounded-full px-2.5 py-1 transition-all duration-300"
+            style={{ 
+              backgroundColor: `${activeAccent.hex}1a`, 
+              color: activeAccent.hex, 
+              borderColor: `${activeAccent.hex}33`
+            }}
+          >
+            <span 
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ backgroundColor: activeAccent.hex }}
+            ></span>
             PIPELINE Connected / 创研设计航线已打通
           </span>
         </div>
@@ -526,20 +711,30 @@ export default function App() {
         <div className="md:hidden fixed inset-x-0 top-16 bg-black/95 backdrop-blur-2xl z-40 flex flex-col justify-between p-6 animate-fade-in border-b border-white/5 h-[340px]">
           <div className="space-y-6 pt-4">
             <div className="relative">
-              <span className="text-[9px] text-[#FF6B00] font-mono tracking-widest block mb-1">NAVIGATION INDEX // 导航索引</span>
+              <span className="text-[9px] font-mono tracking-widest block mb-1" style={{ color: activeAccent.hex }}>NAVIGATION INDEX // 导航索引</span>
               <hr className="border-white/5" />
             </div>
             
             <div className="flex flex-col gap-4">
               <button 
                 onClick={() => { setActiveTab("works"); setIsMobileMenuOpen(false); }}
-                className={`w-full py-4 px-4 bg-white/5 border border-white/5 rounded-xl text-left text-sm uppercase tracking-wider font-semibold transition-all ${activeTab === "works" ? "text-white border-[#FF6B00] bg-orange-500/10" : "text-white/65 hover:text-white"}`}
+                className="w-full py-4 px-4 border rounded-xl text-left text-sm uppercase tracking-wider font-semibold transition-all"
+                style={{
+                  color: activeTab === "works" ? "#ffffff" : "rgba(255,255,255,0.65)",
+                  borderColor: activeTab === "works" ? activeAccent.hex : "rgba(255,255,255,0.05)",
+                  backgroundColor: activeTab === "works" ? `${activeAccent.hex}15` : "rgba(255,255,255,0.05)"
+                }}
               >
                 💼 Works / 主力作品智造舱
               </button>
               <button 
                 onClick={() => { setActiveTab("about"); setIsMobileMenuOpen(false); }}
-                className={`w-full py-4 px-4 bg-white/5 border border-white/5 rounded-xl text-left text-sm uppercase tracking-wider font-semibold transition-all ${activeTab === "about" ? "text-white border-[#FF6B00] bg-orange-500/10" : "text-white/65 hover:text-white"}`}
+                className="w-full py-4 px-4 border rounded-xl text-left text-sm uppercase tracking-wider font-semibold transition-all"
+                style={{
+                  color: activeTab === "about" ? "#ffffff" : "rgba(255,255,255,0.65)",
+                  borderColor: activeTab === "about" ? activeAccent.hex : "rgba(255,255,255,0.05)",
+                  backgroundColor: activeTab === "about" ? `${activeAccent.hex}15` : "rgba(255,255,255,0.05)"
+                }}
               >
                 ℹ️ About Me / 极客理念与蓝图
               </button>
@@ -563,7 +758,10 @@ export default function App() {
             {visibleSections.includes("hero") ? (
               <div className="relative group/sec-wrap">
                 {isEditMode && (
-                  <div className="bg-orange-600/95 text-white text-[9.5px] font-mono px-3.5 py-1 flex items-center justify-between rounded-t-2xl border-t border-x border-orange-500/30">
+                  <div 
+                    className="text-white text-[9.5px] font-mono px-3.5 py-1 flex items-center justify-between rounded-t-2xl border-t border-x transition-all duration-300"
+                    style={{ backgroundColor: activeAccent.hex, borderColor: `${activeAccent.hex}4d` }}
+                  >
                     <span className="font-bold">// SECTION BLOCK: 3D HERO ORASTAR (首屏星空星轨引流区域)</span>
                     <button 
                       onClick={() => toggleSection("hero")}
@@ -581,7 +779,8 @@ export default function App() {
                   <span className="text-xs font-mono text-white/30 uppercase">[ 3D Hero Starfield is Hidden / 首屏引流与3D星云模块已被隐藏 ]</span>
                   <button
                     onClick={() => toggleSection("hero")}
-                    className="mt-2 text-[9px] text-[#FF6B00] hover:underline font-mono"
+                    className="mt-2 text-[9px] hover:underline font-mono"
+                    style={{ color: activeAccent.hex }}
                   >
                     [ ➕ Bring 3D Hero Back / 恢复首屏模块 ]
                   </button>
@@ -592,7 +791,10 @@ export default function App() {
             {visibleSections.includes("capabilities") ? (
               <div className="relative group/sec-wrap">
                 {isEditMode && (
-                  <div className="bg-orange-600/95 text-white text-[9.5px] font-mono px-3.5 py-1.5 flex items-center justify-between rounded-t-3xl border-t border-x border-orange-500/30">
+                  <div 
+                    className="text-white text-[9.5px] font-mono px-3.5 py-1.5 flex items-center justify-between rounded-t-3xl border-t border-x transition-all duration-300"
+                    style={{ backgroundColor: activeAccent.hex, borderColor: `${activeAccent.hex}4d` }}
+                  >
                     <span className="font-bold">// SECTION BLOCK: TECHNICAL CAPABILITIES GRID (高带宽视觉智能赋能舱)</span>
                     <button 
                       onClick={() => toggleSection("capabilities")}
@@ -610,9 +812,10 @@ export default function App() {
                   <span className="text-xs font-mono text-white/30 uppercase">[ Capabilities Matrix is Hidden / 视觉赋能舱卡模块已被隐藏 ]</span>
                   <button
                     onClick={() => toggleSection("capabilities")}
-                    className="mt-2 text-[9px] text-[#FF6B00] hover:underline font-mono"
+                    className="mt-2 text-[9px] hover:underline font-mono"
+                    style={{ color: activeAccent.hex }}
                   >
-                    [ ➕ Bring Capabilities Back / 恢复赋能舱卡 ]
+                    [ ➕ Bring Capabilities Back / 恢复赋能舱模块 ]
                   </button>
                 </div>
               )

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import persistedDefaults from "../data/persisted_defaults.json";
 
 interface DeletableWrapperProps {
   id: string;
@@ -19,7 +20,13 @@ export default function DeletableWrapper({
   const localStorageKey = `ae_delwrap_v3_${id}`;
   
   const [isDeleted, setIsDeleted] = useState(() => {
-    return localStorage.getItem(`${localStorageKey}_deleted`) === "true";
+    const local = localStorage.getItem(`${localStorageKey}_deleted`);
+    if (local !== null) return local === "true";
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[`${localStorageKey}_deleted`];
+    if (persisted !== undefined) {
+      return persisted === true || persisted === "true";
+    }
+    return false;
   });
 
   useEffect(() => {

@@ -28,6 +28,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import DeletableText from "./DeletableText";
 import DeletableWrapper from "./DeletableWrapper";
+import persistedDefaults from "../data/persisted_defaults.json";
 
 // --- INDEXEDDB HELPER FOR HIGH-RES LOSSLESS IMAGES ---
 const DB_NAME = "AerocorePortfolioDB";
@@ -88,6 +89,24 @@ export function getFromIndexedDB(key: string): Promise<string | null> {
     });
 }
 
+export function getAllIndexedDBKeys(): Promise<string[]> {
+  return initIndexedDB()
+    .then((db) => {
+      return new Promise<string[]>((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], "readonly");
+        const store = transaction.objectStore(STORE_NAME);
+        // getAllKeys is standard/available in modern browsers
+        const request = store.getAllKeys();
+        request.onsuccess = () => resolve((request.result || []) as string[]);
+        request.onerror = () => reject(request.error);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to getAllKeys from IndexedDB:", err);
+      return [];
+    });
+}
+
 interface SafeImageProps {
   src?: string;
   fallback?: string;
@@ -117,10 +136,21 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
         if (resolved) {
           setResolvedSrc(resolved);
         } else {
-          setResolvedSrc(fallback || "");
+          // Fallback to persisted defaults JSON from code repository if empty
+          const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
+          if (staticImage) {
+            setResolvedSrc(staticImage);
+          } else {
+            setResolvedSrc(fallback || "");
+          }
         }
       }).catch(() => {
-        setResolvedSrc(fallback || "");
+        const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
+        if (staticImage) {
+          setResolvedSrc(staticImage);
+        } else {
+          setResolvedSrc(fallback || "");
+        }
       });
     } else {
       setResolvedSrc(src);
@@ -549,6 +579,90 @@ const getBlockGridCards = (block: any): AplusGridCard[] => {
   ];
 };
 
+interface AccentColor {
+  id: string;
+  name: string;
+  hex: string;
+  primaryClass: string;
+  hoverBgClass: string;
+  bgClass: string;
+  bgLowOpacity: string;
+  borderClass: string;
+  borderLowOpacity: string;
+  gradientClass: string;
+  pingBg: string;
+  textLight: string;
+  textDark: string;
+  shadowClass: string;
+}
+
+const ACCENT_PRESETS: Record<string, AccentColor> = {
+  blue: {
+    id: "blue",
+    name: "安克科技蓝 (Anker Blue)",
+    hex: "#0066ff",
+    primaryClass: "text-[#0066ff]",
+    hoverBgClass: "hover:bg-[#0066ff]/20",
+    bgClass: "bg-[#0066ff]",
+    bgLowOpacity: "bg-[#0066ff]/10",
+    borderClass: "border-[#0066ff]",
+    borderLowOpacity: "border-[#0066ff]/20",
+    gradientClass: "from-[#0066ff] to-[#00d2ff]",
+    pingBg: "bg-[#00d2ff]",
+    textLight: "text-[#00d2ff]",
+    textDark: "text-blue-500",
+    shadowClass: "shadow-[0_0_15px_rgba(0,102,255,0.4)]"
+  },
+  orange: {
+    id: "orange",
+    name: "正浩极奢橙 (AeroCore Orange)",
+    hex: "#FF6B00",
+    primaryClass: "text-[#FF6B00]",
+    hoverBgClass: "hover:bg-[#FF6B00]/20",
+    bgClass: "bg-[#FF6B00]",
+    bgLowOpacity: "bg-[#FF6B00]/10",
+    borderClass: "border-[#FF6B00]",
+    borderLowOpacity: "border-[#FF6B00]/20",
+    gradientClass: "from-[#FF6B00] to-[#FF9E00]",
+    pingBg: "bg-[#FF6B00]",
+    textLight: "text-[#FF6B00]",
+    textDark: "text-orange-500",
+    shadowClass: "shadow-[0_0_15px_rgba(255,107,0,0.4)]"
+  },
+  teal: {
+    id: "teal",
+    name: "生态大牌绿 (EcoFlow Teal)",
+    hex: "#00E5FF",
+    primaryClass: "text-[#00E5FF]",
+    hoverBgClass: "hover:bg-[#00E5FF]/20",
+    bgClass: "bg-[#00E5FF]",
+    bgLowOpacity: "bg-[#00E5FF]/10",
+    borderClass: "border-[#00E5FF]",
+    borderLowOpacity: "border-[#00E5FF]/20",
+    gradientClass: "from-[#00E5FF] to-emerald-400",
+    pingBg: "bg-[#00E5FF]",
+    textLight: "text-[#00E5FF]",
+    textDark: "text-teal-400",
+    shadowClass: "shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+  },
+  purple: {
+    id: "purple",
+    name: "智造未来紫 (Cyber Purple)",
+    hex: "#9e33ff",
+    primaryClass: "text-[#9e33ff]",
+    hoverBgClass: "hover:bg-[#9e33ff]/20",
+    bgClass: "bg-[#9e33ff]",
+    bgLowOpacity: "bg-[#9e33ff]/10",
+    borderClass: "border-[#9e33ff]",
+    borderLowOpacity: "border-[#9e33ff]/20",
+    gradientClass: "from-[#9e33ff] to-pink-500",
+    pingBg: "bg-[#9e33ff]",
+    textLight: "text-[#d946ef]",
+    textDark: "text-purple-500",
+    shadowClass: "shadow-[0_0_15px_rgba(158,51,255,0.4)]"
+  }
+};
+
 export default function AnkerBlueListingSystem({ 
   isEditMode, 
   setIsEditMode = () => {},
@@ -578,19 +692,45 @@ export default function AnkerBlueListingSystem({
 }: AnkerBlueListingSystemProps) {
   
   // --- STATE PERSISTENCE IN LOCALSTORAGE ---
+  const [themeAccent, setThemeAccent] = useState<"blue" | "orange" | "teal" | "purple">(() => {
+    const val = localStorage.getItem("ae_theme_accent") || (persistedDefaults?.localStorageDump as any)?.ae_theme_accent;
+    return (val as any) || "blue";
+  });
+
+  const activeAccent = ACCENT_PRESETS[themeAccent] || ACCENT_PRESETS.blue;
+
+  useEffect(() => {
+    const handleAccentChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail && ACCENT_PRESETS[customEvent.detail]) {
+        setThemeAccent(customEvent.detail as any);
+      }
+    };
+    window.addEventListener("ae_theme_accent_changed", handleAccentChange);
+    return () => window.removeEventListener("ae_theme_accent_changed", handleAccentChange);
+  }, []);
+
   const [projectsList, setProjectsList] = useState<PortfolioProject[]>(() => {
     const saved = localStorage.getItem("anker_blue_projects_v2");
-    return saved ? JSON.parse(saved) : DEFAULT_PROJECTS;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as any)?.anker_blue_projects_v2;
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return DEFAULT_PROJECTS;
   });
 
   const [categories, setCategories] = useState<CategoryItem[]>(() => {
     const saved = localStorage.getItem("anker_blue_categories_v2");
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as any)?.anker_blue_categories_v2;
+    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    return DEFAULT_CATEGORIES;
   });
 
   const [currentCategory, setCurrentCategory] = useState<string>(() => {
     const saved = localStorage.getItem("anker_current_category_v2");
-    return saved || "storage";
+    if (saved) return saved;
+    const persisted = (persistedDefaults?.localStorageDump as any)?.anker_current_category_v2;
+    return (persisted as string) || "storage";
   });
 
   useEffect(() => {
@@ -611,7 +751,12 @@ export default function AnkerBlueListingSystem({
 
   const [activeProjectId, setActiveProjectId] = useState<number>(() => {
     const savedActive = localStorage.getItem("anker_active_project_id_v2");
-    return savedActive ? parseInt(savedActive, 10) : 1;
+    if (savedActive) return parseInt(savedActive, 10);
+    const persisted = (persistedDefaults?.localStorageDump as any)?.anker_active_project_id_v2;
+    if (persisted !== undefined && persisted !== null) {
+      return typeof persisted === "number" ? persisted : parseInt(persisted as string, 10);
+    }
+    return 1;
   });
 
   // Tabs View: lobby (大师案例库), detail (深度故事页), sandbox (A+ 互动沙盒)
@@ -979,15 +1124,68 @@ export default function AnkerBlueListingSystem({
     const handleCommit = () => {
       try {
         localStorage.setItem("anker_blue_projects_v2", JSON.stringify(projectsList));
+        localStorage.setItem("anker_blue_categories_v2", JSON.stringify(categories));
+        localStorage.setItem("anker_current_category_v2", currentCategory);
+        localStorage.setItem("anker_active_project_id_v2", activeProjectId.toString());
       } catch (e: any) {
         console.error("Failed to save projectsList on commit:", e);
       }
+
+      // Automatically serialize the entire customized workspace state and persist directly into system code!
+      setTimeout(async () => {
+        try {
+          // 1. Collect all local storage keys starting with ae_ and anker_
+          const localStorageDump: Record<string, string> = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith("ae_") || key.startsWith("anker_"))) {
+              const val = localStorage.getItem(key);
+              if (val !== null) {
+                localStorageDump[key] = val;
+              }
+            }
+          }
+
+          // 2. Query all image keys inside IndexedDB and serialize to Base64 data maps
+          const dbImagesMap: Record<string, string> = {};
+          const dbKeys = await getAllIndexedDBKeys();
+          await Promise.all(
+            dbKeys.map(async (key) => {
+              const base64 = await getFromIndexedDB(key);
+              if (base64) {
+                dbImagesMap[key] = base64;
+              }
+            })
+          );
+
+          // 3. POST it to local Express server API for permanent system repository commitment!
+          const response = await fetch("/api/save-defaults", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ localStorageDump, dbImagesMap })
+          });
+
+          if (response.ok) {
+            const resData = await response.json();
+            console.log("Successfully persisted custom workspace design directly to code storage:", resData);
+            addToast(
+              "success",
+              "🚀 系统代码同步固化成功 / Sync Successfully",
+              "最新设计与无损大图已被自动淬炼并写入项目代码中！当您重新部署到 Vercel 后，其他所有的电脑和手机打开都将默认完美显示您的定制内容，无需手动导入！"
+            );
+          }
+        } catch (apiErr) {
+          console.warn("Save defaults failed (expected if not running in local sandbox dev mode):", apiErr);
+        }
+      }, 500);
     };
     window.addEventListener("ae_commit_save", handleCommit);
     return () => {
       window.removeEventListener("ae_commit_save", handleCommit);
     };
-  }, [projectsList]);
+  }, [projectsList, categories, currentCategory, activeProjectId]);
 
   useEffect(() => {
     try {
@@ -1769,7 +1967,10 @@ Module #${i + 1}: ${b.title}
               <div className="p-8 rounded-3xl bg-gradient-to-r from-white/[0.01] to-transparent border border-white/5 text-left space-y-3">
                 <span className="text-[10px] text-zinc-500 tracking-widest font-bold uppercase block font-mono">// OUTBOUND LEADERBOARD BRANDING / 亚马逊高端品牌视觉研制</span>
                 <h1 className="text-3xl md:text-5xl font-black text-white leading-none font-sans">
-                  SCULPTING METRICS IN <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-amber-500">HARDCORE GLASS.</span>
+                  SCULPTING METRICS IN <span 
+                    className="bg-clip-text text-transparent bg-gradient-to-r font-extrabold"
+                    style={{ backgroundImage: `linear-gradient(to right, ${activeAccent.hex}, ${themeAccent === "blue" ? "#00d2ff" : "#FFD700"})` }}
+                  >HARDCORE GLASS.</span>
                 </h1>
                 <p className="text-xs text-zinc-400 font-light leading-relaxed max-w-3xl font-sans">
                   结合苹果极简留白叙事与正浩硬核3D结构渲染。我们为出海高溢价产品量身定制从 Listing 主图至 Premium A+ 的全套转化率视觉系统。
@@ -1885,7 +2086,8 @@ Module #${i + 1}: ${b.title}
                             suppressContentEditableWarning
                             onBlur={(e) => updateProjectFieldById(p.id, "subtitle", e.currentTarget.innerText)}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] text-orange-500 tracking-widest font-extrabold block mb-1 uppercase font-mono outline-none"
+                            className="text-[10px] tracking-widest font-extrabold block mb-1 uppercase font-mono outline-none transition-all duration-300"
+                            style={{ color: activeAccent.hex }}
                           >
                             // {p.subtitle}
                           </span>
@@ -1939,7 +2141,10 @@ Module #${i + 1}: ${b.title}
                             {p.metrics.map((m, idx) => (
                               <div key={idx} className="flex justify-between items-center text-[10px] border-b border-white/5 last:border-0 pb-1.5 last:pb-0">
                                 <span className="font-bold text-zinc-400">{m.label}</span>
-                                <span className="font-mono text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-400 font-extrabold text-[10.5px]">
+                                <span 
+                                  className="font-mono bg-clip-text text-transparent bg-gradient-to-r font-extrabold text-[10.5px]"
+                                  style={{ backgroundImage: `linear-gradient(to right, ${activeAccent.hex}, ${themeAccent === "blue" ? "#00d2ff" : "#FFC700"})` }}
+                                >
                                   {m.val}
                                 </span>
                               </div>
@@ -1952,7 +2157,7 @@ Module #${i + 1}: ${b.title}
                           <span className="uppercase font-bold">
                             💡 单击深度故事 / CLICK DETAIL
                           </span>
-                          <span className="text-[#00d2ff] font-extrabold animate-pulse">
+                          <span className="font-extrabold animate-pulse" style={{ color: activeAccent.hex }}>
                             ⚡ 双击直达 A+ 沙盒 重构 ➜
                           </span>
                         </div>
@@ -2154,7 +2359,8 @@ Module #${i + 1}: ${b.title}
                               suppressContentEditableWarning
                               onBlur={(e) => updateProjectFieldById(p.id, "subtitle", e.currentTarget.innerText)}
                               onClick={(e) => e.stopPropagation()}
-                              className="text-[9px] text-orange-500 tracking-widest font-extrabold block uppercase font-mono outline-none"
+                              className="text-[9px] tracking-widest font-extrabold block uppercase font-mono outline-none transition-all duration-300"
+                              style={{ color: activeAccent.hex }}
                             >
                               // {p.subtitle}
                             </span>
@@ -2411,7 +2617,10 @@ Module #${i + 1}: ${b.title}
               {/* Right Column: Case narratives, specs, and metrics lists */}
               <div className="lg:col-span-5 flex flex-col justify-between py-2 space-y-8">
                 <div className="space-y-4">
-                  <span className="text-[10px] text-orange-500 tracking-widest font-extrabold block uppercase font-mono">
+                  <span 
+                    className="text-[10px] tracking-widest font-extrabold block uppercase font-mono outline-none transition-all duration-300"
+                    style={{ color: activeAccent.hex }}
+                  >
                     // {activeProject.subtitle}
                   </span>
                   

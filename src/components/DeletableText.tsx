@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import persistedDefaults from "../data/persisted_defaults.json";
 
 interface DeletableTextProps {
   id: string;
@@ -19,20 +20,39 @@ export default function DeletableText({
   const localStorageKey = `ae_deltext_v3_${id}`;
   
   const [text, setText] = useState(() => {
-    return localStorage.getItem(localStorageKey) || defaultText;
+    const local = localStorage.getItem(localStorageKey);
+    if (local !== null) return local;
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, string>)?.[localStorageKey];
+    if (persisted !== undefined) return persisted;
+    return defaultText;
   });
   
   const [isDeleted, setIsDeleted] = useState(() => {
-    return localStorage.getItem(`${localStorageKey}_deleted`) === "true";
+    const local = localStorage.getItem(`${localStorageKey}_deleted`);
+    if (local !== null) return local === "true";
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[`${localStorageKey}_deleted`];
+    if (persisted !== undefined) {
+      return persisted === true || persisted === "true";
+    }
+    return false;
   });
 
   const [extraClasses, setExtraClasses] = useState(() => {
-    return localStorage.getItem(`ae_delstyle_${id}`) || "";
+    const local = localStorage.getItem(`ae_delstyle_${id}`);
+    if (local !== null) return local;
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, string>)?.[`ae_delstyle_${id}`];
+    if (persisted !== undefined) return persisted;
+    return "";
   });
 
   const [siblings, setSiblings] = useState<string[]>(() => {
     const saved = localStorage.getItem(`ae_deltext_v3_${id}_siblings`);
-    return saved ? JSON.parse(saved) : [];
+    if (saved) return JSON.parse(saved);
+    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[`ae_deltext_v3_${id}_siblings`];
+    if (persisted !== undefined && persisted !== null) {
+      return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    }
+    return [];
   });
 
   // Listen for the global save event to commit changes to localStorage

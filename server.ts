@@ -320,18 +320,97 @@ app.post("/api/save-defaults", (req, res) => {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
+    const filePath = path.join(dataDir, "persisted_defaults.json");
+    let existingDbImagesMap: Record<string, string> = {};
+
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.dbImagesMap) {
+          existingDbImagesMap = parsed.dbImagesMap;
+        }
+      } catch (err) {
+        console.warn("Failed to check existing persisted_defaults.json images:", err);
+      }
+    }
+
+    // Merge incoming images with existing ones
+    let finalDbImagesMap = { ...existingDbImagesMap };
+    if (dbImagesMap && Object.keys(dbImagesMap).length > 0) {
+      finalDbImagesMap = { ...finalDbImagesMap, ...dbImagesMap };
+    }
+
+    // Prune images that are no longer referenced in the saved projects list to prevent bloating the package
+    let projectsList: any[] = [];
+    try {
+      const projectsRaw = localStorageDump["anker_blue_projects_v2"];
+      if (projectsRaw) {
+        projectsList = JSON.parse(projectsRaw);
+      }
+    } catch (e) {
+      console.warn("Could not parse target projectsList for image-cleanup:", e);
+    }
+
+    if (projectsList && projectsList.length > 0) {
+      const activeKeys = new Set<string>();
+      projectsList.forEach((p: any) => {
+        if (p.img && p.img.startsWith("db_img_")) {
+          activeKeys.add(p.img);
+        }
+        if (p.mainImages) {
+          p.mainImages.forEach((item: any) => {
+            if (item.img && item.img.startsWith("db_img_")) {
+              activeKeys.add(item.img);
+            }
+          });
+        }
+        if (p.aplusBlocks) {
+          p.aplusBlocks.forEach((block: any) => {
+            if (block.premiumImg && block.premiumImg.startsWith("db_img_")) {
+              activeKeys.add(block.premiumImg);
+            }
+            if (block.competitorImg && block.competitorImg.startsWith("db_img_")) {
+              activeKeys.add(block.competitorImg);
+            }
+            if (block.carouselSlides) {
+              block.carouselSlides.forEach((slide: any) => {
+                if (slide.img && slide.img.startsWith("db_img_")) {
+                  activeKeys.add(slide.img);
+                }
+              });
+            }
+            if (block.gridCards) {
+              block.gridCards.forEach((card: any) => {
+                if (card.img && card.img.startsWith("db_img_")) {
+                  activeKeys.add(card.img);
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // Filter and delete orphaned images that are no longer referenced
+      Object.keys(finalDbImagesMap).forEach((key) => {
+        if (!activeKeys.has(key)) {
+          delete finalDbImagesMap[key];
+        }
+      });
+    }
+
     const payload = {
       localStorageDump,
-      dbImagesMap: dbImagesMap || {}
+      dbImagesMap: finalDbImagesMap
     };
 
     fs.writeFileSync(
-      path.join(dataDir, "persisted_defaults.json"),
+      filePath,
       JSON.stringify(payload, null, 2),
       "utf-8"
     );
 
-    console.log("Successfully persisted active layout state to /src/data/persisted_defaults.json!");
+    console.log(`Successfully persisted active state to persisted_defaults.json! Saved ${Object.keys(finalDbImagesMap).length} images.`);
     return res.json({ 
       success: true, 
       message: "Custom database defaults committed directly to local repository! (成功将最新站存数据永久淬炼进本地仓库代码)" 
@@ -339,6 +418,45 @@ app.post("/api/save-defaults", (req, res) => {
   } catch (err: any) {
     console.error("Save defaults error:", err);
     return res.status(500).json({ error: err.message || "Failed to commit layout changes to repository." });
+  }
+});
+
+// API Endpoint to write a single custom image into raw persisted defaults directly on the server to bypass network payload body-size limitations
+app.post("/api/save-image", (req, res) => {
+  try {
+    const { key, base64 } = req.body;
+    if (!key || !base64) {
+      return res.status(400).json({ error: "Missing image key or base64 data" });
+    }
+
+    const dataDir = path.join(process.cwd(), "src", "data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    const filePath = path.join(dataDir, "persisted_defaults.json");
+    let payload: any = { localStorageDump: {}, dbImagesMap: {} };
+
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        payload = JSON.parse(raw);
+      } catch (err) {
+        console.warn("Failed to check existing persisted_defaults.json for save-image:", err);
+      }
+    }
+
+    if (!payload.dbImagesMap) {
+      payload.dbImagesMap = {};
+    }
+
+    payload.dbImagesMap[key] = base64;
+
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
+    return res.json({ success: true, message: `Image ${key} saved successfully.` });
+  } catch (err: any) {
+    console.error("Save single image error:", err);
+    return res.status(500).json({ error: err.message || "Failed to save the image to repository defaults." });
   }
 });
 

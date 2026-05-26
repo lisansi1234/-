@@ -126,6 +126,49 @@ export function getAllIndexedDBKeys(): Promise<string[]> {
     });
 }
 
+export function getActiveImageKeys(pList: any[]): string[] {
+  const dbKeys = new Set<string>();
+  if (!pList || !Array.isArray(pList)) return [];
+
+  pList.forEach((p) => {
+    if (p.img && p.img.startsWith("db_img_")) {
+      dbKeys.add(p.img);
+    }
+    if (p.mainImages) {
+      p.mainImages.forEach((item: any) => {
+        if (item.img && item.img.startsWith("db_img_")) {
+          dbKeys.add(item.img);
+        }
+      });
+    }
+    if (p.aplusBlocks) {
+      p.aplusBlocks.forEach((block: any) => {
+        if (block.premiumImg && block.premiumImg.startsWith("db_img_")) {
+          dbKeys.add(block.premiumImg);
+        }
+        if (block.competitorImg && block.competitorImg.startsWith("db_img_")) {
+          dbKeys.add(block.competitorImg);
+        }
+        if (block.carouselSlides) {
+          block.carouselSlides.forEach((slide: any) => {
+            if (slide.img && slide.img.startsWith("db_img_")) {
+              dbKeys.add(slide.img);
+            }
+          });
+        }
+        if (block.gridCards) {
+          block.gridCards.forEach((card: any) => {
+            if (card.img && card.img.startsWith("db_img_")) {
+              dbKeys.add(card.img);
+            }
+          });
+        }
+      });
+    }
+  });
+  return Array.from(dbKeys);
+}
+
 interface SafeImageProps {
   src?: string;
   fallback?: string;
@@ -984,67 +1027,89 @@ export default function AnkerBlueListingSystem({
     });
   };
 
-  const handleManualPermanentSave = async () => {
-    const toastId = addToast(
-      "uploading",
-      "🚀 正在写入底座源码 / Saving...",
-      "正在收集整站文案、全套分类排版以及当前 IndexedDB 精细无损大图，合入底座代码包中..."
-    );
-    try {
-      const dbKeys = new Set<string>();
-      projectsList.forEach(p => {
-        if (p.img && p.img.startsWith("db_img_")) {
-          dbKeys.add(p.img);
-        }
-        if (p.mainImages) {
-          p.mainImages.forEach(item => {
-            if (item.img && item.img.startsWith("db_img_")) {
-              dbKeys.add(item.img);
-            }
-          });
-        }
-        if (p.aplusBlocks) {
-          p.aplusBlocks.forEach(block => {
-            if (block.premiumImg && block.premiumImg.startsWith("db_img_")) {
-              dbKeys.add(block.premiumImg);
-            }
-            if (block.competitorImg && block.competitorImg.startsWith("db_img_")) {
-              dbKeys.add(block.competitorImg);
-            }
-            if (block.carouselSlides) {
-              block.carouselSlides.forEach(slide => {
-                if (slide.img && slide.img.startsWith("db_img_")) {
-                  dbKeys.add(slide.img);
-                }
-              });
-            }
-            if (block.gridCards) {
-              block.gridCards.forEach(card => {
-                if (card.img && card.img.startsWith("db_img_")) {
-                  dbKeys.add(card.img);
-                }
-              });
-            }
-          });
-        }
-      });
-
-      const keysArray = Array.from(dbKeys);
-      const dbImagesMap: Record<string, string> = {};
-      
-      await Promise.all(
-        keysArray.map(async (key) => {
-          try {
-            const base64 = await getFromIndexedDB(key);
-            if (base64) {
-              dbImagesMap[key] = base64;
-            }
-          } catch (e) {
-            console.error("Failed to read image for custom save key:", key, e);
-          }
-        })
+  const unifiedPersistentSave = async (
+    targetProjectsList: any,
+    targetCategories: any,
+    targetCurrentCategory?: string,
+    targetActiveProjectId?: number,
+    customImagesMap?: any,
+    showDetailedToasts: boolean = true
+  ) => {
+    let toastId = "";
+    if (showDetailedToasts) {
+      toastId = addToast(
+        "uploading",
+        "🚀 正在写入底座源码 / Saving...",
+        "正在准备同步数据包，检测本地高清大图与排版模型..."
       );
+    }
 
+    try {
+      // 1. Get active image keys in the projects list
+      const activeKeys = getActiveImageKeys(targetProjectsList);
+
+      // 2. Fetch the current server defaults to see what's already saved on disk
+      let existingKeys = new Set<string>();
+      try {
+        const res = await fetch("/api/get-defaults");
+        if (res.ok) {
+          const freshData = await res.json();
+          if (freshData && freshData.dbImagesMap) {
+            existingKeys = new Set(Object.keys(freshData.dbImagesMap));
+            // Update globalLoadedDynamicDefaults in case
+            (window as any).__loadedDynamicDefaults = freshData;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch current server defaults, will upload any missing keys: ", err);
+      }
+
+      // 3. Find image keys that need to be uploaded (i.e. present in activeKeys but not in server's existingKeys)
+      const keysToUpload = activeKeys.filter(key => !existingKeys.has(key));
+
+      if (keysToUpload.length > 0) {
+        if (showDetailedToasts) {
+          addToast(
+            "uploading",
+            "📸 正在传输高清大图 / Syncing Assets...",
+            `发现 ${keysToUpload.length} 张未固化的自定义大图，正在分批同步入底座源码库...`
+          );
+        }
+
+        // Upload only new images sequentially to completely bypass body size limits
+        for (let i = 0; i < keysToUpload.length; i++) {
+          const key = keysToUpload[i];
+          let base64 = customImagesMap ? customImagesMap[key] : null;
+          if (!base64) {
+            base64 = await getFromIndexedDB(key);
+          }
+
+          if (base64) {
+            if (showDetailedToasts) {
+              addToast(
+                "uploading",
+                `📸 正在写入底座原画池 (${i + 1}/${keysToUpload.length})`,
+                `正在向持久化存储写入 ${key.substring(0, 16)}...`
+              );
+            }
+
+            try {
+              const saveImgRes = await fetch("/api/save-image", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key, base64 })
+              });
+              if (!saveImgRes.ok) {
+                console.warn(`Failed to upload single image key: ${key}, status: ${saveImgRes.status}`);
+              }
+            } catch (imgErr) {
+              console.error(`Error uploading image key: ${key}`, imgErr);
+            }
+          }
+        }
+      }
+
+      // 4. Double check what's in local storage
       const localStorageDump: Record<string, string> = {};
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -1056,32 +1121,52 @@ export default function AnkerBlueListingSystem({
         }
       }
 
-      localStorageDump["anker_blue_projects_v2"] = JSON.stringify(projectsList);
-      localStorageDump["anker_blue_categories_v2"] = JSON.stringify(categories);
-      localStorageDump["anker_current_category_v2"] = currentCategory;
-      localStorageDump["anker_active_project_id_v2"] = String(activeProjectId);
+      // Guarantee the passed targets are saved
+      localStorageDump["anker_blue_projects_v2"] = JSON.stringify(targetProjectsList);
+      localStorageDump["anker_blue_categories_v2"] = JSON.stringify(targetCategories);
+      if (targetCurrentCategory) {
+        localStorageDump["anker_current_category_v2"] = targetCurrentCategory;
+      }
+      if (targetActiveProjectId !== undefined) {
+        localStorageDump["anker_active_project_id_v2"] = String(targetActiveProjectId);
+      }
 
+      // 5. Send layout defaults with empty dbImagesMap, as images were already uploaded individually!
       const response = await fetch("/api/save-defaults", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ localStorageDump, dbImagesMap })
+        body: JSON.stringify({ localStorageDump, dbImagesMap: {} })
       });
 
-      removeToast(toastId);
+      if (toastId) removeToast(toastId);
+
       if (response.ok) {
-        addToast(
-          "success",
-          "🚀 永久源码固化成功 / Permanently Written !",
-          "已成功将您当前的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您重新部署到 Vercel 后，世界上任何电脑和手机打开您的网址都将默认显示完美的本站定制内容，无需手动导入恢复！"
-        );
+        if (showDetailedToasts) {
+          addToast(
+            "success",
+            "🚀 永久源码固化成功 / Permanently Written !",
+            "已成功将您当前的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您下一次重新部署到 Vercel 后，世界上任何电脑和手机打开您的网址都将默认显示完美的本站定制内容，无需手动导入恢复！"
+          );
+        } else {
+          console.log("Automatically synchronized workspace state to server successfully.");
+        }
       } else {
-        addToast("error", "写入失败", "开发服务器响应异常，请确保开发服务正常运转。");
+        if (showDetailedToasts) {
+          addToast("error", "写入失败", "写源码逻辑正常，但提交总配置时服务返回异常，请重试。");
+        }
       }
+
     } catch (err) {
-      removeToast(toastId);
+      if (toastId) removeToast(toastId);
       console.error(err);
-      addToast("error", "源码固化失败", "无法通过 API 写入底层代码。");
+      if (showDetailedToasts) {
+        addToast("error", "底座同步失败", "由于网络连接受阻，请确保开发服务正常运转，然后重试。");
+      }
     }
+  };
+
+  const handleManualPermanentSave = async () => {
+    await unifiedPersistentSave(projectsList, categories, currentCategory, activeProjectId, null, true);
   };
 
   const sendWorkspaceToBackendPermanentSave = async (
@@ -1091,61 +1176,14 @@ export default function AnkerBlueListingSystem({
     customActiveProjectId?: number, 
     customImagesMap?: any
   ) => {
-    try {
-      const localStorageDump: Record<string, string> = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith("ae_") || key.startsWith("anker_"))) {
-          const val = localStorage.getItem(key);
-          if (val !== null) {
-            localStorageDump[key] = val;
-          }
-        }
-      }
-
-      // Explicitly override with the passed values to prevent race conditions or async stale state
-      localStorageDump["anker_blue_projects_v2"] = JSON.stringify(customProjectsList);
-      localStorageDump["anker_blue_categories_v2"] = JSON.stringify(customCategories);
-      if (customCurrentCategory) {
-        localStorageDump["anker_current_category_v2"] = customCurrentCategory;
-      }
-      if (customActiveProjectId !== undefined) {
-        localStorageDump["anker_active_project_id_v2"] = String(customActiveProjectId);
-      }
-
-      // Collect images
-      let dbImagesMap = customImagesMap;
-      if (!dbImagesMap) {
-        dbImagesMap = {};
-        const dbKeys = await getAllIndexedDBKeys();
-        await Promise.all(
-          dbKeys.map(async (key) => {
-            const base64 = await getFromIndexedDB(key);
-            if (base64) {
-              dbImagesMap[key] = base64;
-            }
-          })
-        );
-      }
-
-      const response = await fetch("/api/save-defaults", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ localStorageDump, dbImagesMap })
-      });
-
-      if (response.ok) {
-        const resData = await response.json();
-        console.log("Automatically synchronized imported/committed backup to server sources successfully:", resData);
-        addToast(
-          "success",
-          "🚀 永久源码固化成功 / Permanently Written to Codebase",
-          "已成功将您导入的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您下一次重新部署到 Vercel 后，世界上任何电脑和手机打开您的网址都将默认显示完美的本站定制内容，无需手动导入恢复！"
-        );
-      }
-    } catch (err) {
-      console.warn("Backend persistent write skipped or failed (expected if not in local sandbox sandbox mode):", err);
-    }
+    await unifiedPersistentSave(
+      customProjectsList,
+      customCategories,
+      customCurrentCategory,
+      customActiveProjectId,
+      customImagesMap,
+      true
+    );
   };
 
   const handleImportWorkspaceJson = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1410,50 +1448,16 @@ export default function AnkerBlueListingSystem({
       // Automatically serialize the entire customized workspace state and persist directly into system code!
       setTimeout(async () => {
         try {
-          // 1. Collect all local storage keys starting with ae_ and anker_
-          const localStorageDump: Record<string, string> = {};
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.startsWith("ae_") || key.startsWith("anker_"))) {
-              const val = localStorage.getItem(key);
-              if (val !== null) {
-                localStorageDump[key] = val;
-              }
-            }
-          }
-
-          // 2. Query all image keys inside IndexedDB and serialize to Base64 data maps
-          const dbImagesMap: Record<string, string> = {};
-          const dbKeys = await getAllIndexedDBKeys();
-          await Promise.all(
-            dbKeys.map(async (key) => {
-              const base64 = await getFromIndexedDB(key);
-              if (base64) {
-                dbImagesMap[key] = base64;
-              }
-            })
+          await unifiedPersistentSave(
+            projectsList,
+            categories,
+            currentCategory,
+            activeProjectId,
+            null,
+            false // Silent background auto-sync!
           );
-
-          // 3. POST it to local Express server API for permanent system repository commitment!
-          const response = await fetch("/api/save-defaults", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ localStorageDump, dbImagesMap })
-          });
-
-          if (response.ok) {
-            const resData = await response.json();
-            console.log("Successfully persisted custom workspace design directly to code storage:", resData);
-            addToast(
-              "success",
-              "🚀 系统代码同步固化成功 / Sync Successfully",
-              "最新设计与无损大图已被自动淬炼并写入项目代码中！当您重新部署到 Vercel 后，其他所有的电脑和手机打开都将默认完美显示您的定制内容，无需手动导入！"
-            );
-          }
         } catch (apiErr) {
-          console.warn("Save defaults failed (expected if not running in local sandbox dev mode):", apiErr);
+          console.warn("Auto save defaults failed:", apiErr);
         }
       }, 500);
     };

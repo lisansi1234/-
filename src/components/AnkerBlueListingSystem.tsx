@@ -1069,7 +1069,8 @@ export default function AnkerBlueListingSystem({
 
       if (keysToUpload.length > 0) {
         if (showDetailedToasts) {
-          addToast(
+          updateToast(
+            toastId,
             "uploading",
             "📸 正在传输高清大图 / Syncing Assets...",
             `发现 ${keysToUpload.length} 张未固化的自定义大图，正在分批同步入底座源码库...`
@@ -1086,7 +1087,8 @@ export default function AnkerBlueListingSystem({
 
           if (base64) {
             if (showDetailedToasts) {
-              addToast(
+              updateToast(
+                toastId,
                 "uploading",
                 `📸 正在写入底座原画池 (${i + 1}/${keysToUpload.length})`,
                 `正在向持久化存储写入 ${key.substring(0, 16)}...`
@@ -1131,6 +1133,15 @@ export default function AnkerBlueListingSystem({
         localStorageDump["anker_active_project_id_v2"] = String(targetActiveProjectId);
       }
 
+      if (showDetailedToasts) {
+        updateToast(
+          toastId,
+          "uploading",
+          "🔬 正在淬炼系统环境依赖 / Directing Package...",
+          "图片写入完毕，正在将文字排版及全局元数据淬炼并注入系统底座..."
+        );
+      }
+
       // 5. Send layout defaults with empty dbImagesMap, as images were already uploaded individually!
       const response = await fetch("/api/save-defaults", {
         method: "POST",
@@ -1138,29 +1149,37 @@ export default function AnkerBlueListingSystem({
         body: JSON.stringify({ localStorageDump, dbImagesMap: {} })
       });
 
-      if (toastId) removeToast(toastId);
-
       if (response.ok) {
         if (showDetailedToasts) {
-          addToast(
+          updateToast(
+            toastId,
             "success",
             "🚀 永久源码固化成功 / Permanently Written !",
-            "已成功将您当前的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您下一次重新部署到 Vercel 后，世界上任何电脑和手机打开您的网址都将默认显示完美的本站定制内容，无需手动导入恢复！"
+            "已成功将您当前的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您下一次重新部署后，任何终端打开该页面都将直接加载定制内容。"
           );
         } else {
           console.log("Automatically synchronized workspace state to server successfully.");
         }
       } else {
         if (showDetailedToasts) {
-          addToast("error", "写入失败", "写源码逻辑正常，但提交总配置时服务返回异常，请重试。");
+          updateToast(
+            toastId,
+            "error",
+            "写入失败",
+            "写源码逻辑正常，但提交总配置时服务返回异常，请重试。"
+          );
         }
       }
 
     } catch (err) {
-      if (toastId) removeToast(toastId);
       console.error(err);
       if (showDetailedToasts) {
-        addToast("error", "底座同步失败", "由于网络连接受阻，请确保开发服务正常运转，然后重试。");
+        updateToast(
+          toastId,
+          "error",
+          "底座同步失败",
+          "由于网络连接受阻，请确保开发服务正常运转，然后重试。"
+        );
       }
     }
   };
@@ -1527,6 +1546,23 @@ export default function AnkerBlueListingSystem({
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const updateToast = (id: string, type: "success" | "info" | "warning" | "error" | "uploading", title: string, desc: string) => {
+    if (!id) return addToast(type, title, desc);
+    setToasts(prev => {
+      const exists = prev.some(t => t.id === id);
+      if (!exists) {
+        return [...prev, { id, type, title, desc }];
+      }
+      return prev.map(t => t.id === id ? { id, type, title, desc } : t);
+    });
+    if (type !== "uploading") {
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 5000);
+    }
+    return id;
   };
 
   // Listen to custom "ae_save_success" event

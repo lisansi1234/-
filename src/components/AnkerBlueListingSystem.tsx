@@ -1102,10 +1102,18 @@ export default function AnkerBlueListingSystem({
                 body: JSON.stringify({ key, base64 })
               });
               if (!saveImgRes.ok) {
-                console.warn(`Failed to upload single image key: ${key}, status: ${saveImgRes.status}`);
+                let imgErrMsg = `图片 ${key.substring(0, 16)} 写入底座原画池失败。`;
+                try {
+                  const data = await saveImgRes.json();
+                  if (data && data.error) {
+                    imgErrMsg = data.error;
+                  }
+                } catch (_) {}
+                throw new Error(imgErrMsg);
               }
-            } catch (imgErr) {
+            } catch (imgErr: any) {
               console.error(`Error uploading image key: ${key}`, imgErr);
+              throw imgErr;
             }
           }
         }
@@ -1161,24 +1169,31 @@ export default function AnkerBlueListingSystem({
           console.log("Automatically synchronized workspace state to server successfully.");
         }
       } else {
+        let saveErrMsg = "写源码逻辑正常，但提交总配置时服务返回异常，请重试。";
+        try {
+          const data = await response.json();
+          if (data && data.error) {
+            saveErrMsg = data.error;
+          }
+        } catch (_) {}
         if (showDetailedToasts) {
           updateToast(
             toastId,
             "error",
             "写入失败",
-            "写源码逻辑正常，但提交总配置时服务返回异常，请重试。"
+            saveErrMsg
           );
         }
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       if (showDetailedToasts) {
         updateToast(
           toastId,
           "error",
           "底座同步失败",
-          "由于网络连接受阻，请确保开发服务正常运转，然后重试。"
+          err.message || "由于网络连接受阻，请确保开发服务正常运转，然后重试。"
         );
       }
     }

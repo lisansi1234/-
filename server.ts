@@ -417,6 +417,16 @@ app.post("/api/save-defaults", (req, res) => {
     });
   } catch (err: any) {
     console.error("Save defaults error:", err);
+    const isReadOnly = err.code === "EROFS" || 
+                       (err.message && (err.message.includes("read-only") || err.message.includes("readonly") || err.message.includes("permission denied"))) ||
+                       process.env.VERCEL || 
+                       process.env.NOW_BUILDER;
+    
+    if (isReadOnly) {
+      return res.status(500).json({ 
+        error: "检测到当前运行在只读生产环境 (如 Vercel 部署)。\n\n「永久源码固化 / Persistent Save」必须在 AI Studio 开发平台或本地开发中运行，因为它需要直接写入项目工程的 \`src/data/persisted_defaults.json\` 文件。\n\n💡 完美解决方案：\n1. 请在您的 **AI Studio 蓝图开发面板** 中点击此按钮 (永久源码固化)。\n2. 点击后，开发平台会自动将定制图像、分类排版淬炼并编译写入本地代码底座中。此时您再次推送至 GitHub/重新触发 Vercel 部署，生产环境就会一劳永逸加载本套默认站存，全球访问无需手动导入备份！" 
+      });
+    }
     return res.status(500).json({ error: err.message || "Failed to commit layout changes to repository." });
   }
 });
@@ -456,6 +466,16 @@ app.post("/api/save-image", (req, res) => {
     return res.json({ success: true, message: `Image ${key} saved successfully.` });
   } catch (err: any) {
     console.error("Save single image error:", err);
+    const isReadOnly = err.code === "EROFS" || 
+                       (err.message && (err.message.includes("read-only") || err.message.includes("readonly") || err.message.includes("permission denied"))) ||
+                       process.env.VERCEL || 
+                       process.env.NOW_BUILDER;
+    
+    if (isReadOnly) {
+      return res.status(500).json({ 
+        error: "检测到当前运行在只读生产环境 (如 Vercel 部署)。\n\n「永久源码固化 / Persistent Save」必须在 AI Studio 开发平台或本地开发中运行，因为它需要直接写入项目工程的 \`src/data/persisted_defaults.json\` 文件。\n\n💡 完美解决方案：\n1. 请在您的 **AI Studio 蓝图开发面板** 中点击此按钮 (永久源码固化)。\n2. 点击后，开发平台会自动将定制图像、分类排版淬炼并编译写入本地代码底座中。此时您再次推送至 GitHub/重新触发 Vercel 部署，生产环境就会一劳永逸加载本套默认站存，全球访问无需手动导入备份！" 
+      });
+    }
     return res.status(500).json({ error: err.message || "Failed to save the image to repository defaults." });
   }
 });

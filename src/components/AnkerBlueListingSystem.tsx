@@ -1079,6 +1079,21 @@ export default function AnkerBlueListingSystem({
     customImagesMap?: any,
     showDetailedToasts: boolean = true
   ) => {
+    // 拦截非开发运行环境的点击 (Vercel 或 其他高度只读静态云托管环境)
+    const hostname = window.location.hostname;
+    const isDevelopmentEnv = 
+      hostname.includes("localhost") || 
+      hostname.includes("127.0.0.1") || 
+      hostname.includes(".run.app") ||
+      hostname.includes("webcontainer") ||
+      hostname.includes("stackblitz");
+
+    if (!isDevelopmentEnv) {
+      console.log("Blocking local-write persistent save on production read-only host:", hostname);
+      setIsVercelInfoModalOpen(true);
+      return;
+    }
+
     let toastId = "";
     if (showDetailedToasts) {
       toastId = addToast(
@@ -1478,6 +1493,7 @@ export default function AnkerBlueListingSystem({
 
   // States for custom Sector addition modal (to bypass iframe prompt blocking)
   const [isAddSectorOpen, setIsAddSectorOpen] = useState(false);
+  const [isVercelInfoModalOpen, setIsVercelInfoModalOpen] = useState(false);
   const [newSectorName, setNewSectorName] = useState("");
   const [newSectorLayout, setNewSectorLayout] = useState<"asymmetrical" | "bento" | "grid3">("grid3");
 
@@ -4816,6 +4832,88 @@ Module #${i + 1}: ${b.title}
                 <span>➕ 确认智造 / Create</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vercel Production Environment Read-only Sync Logic Explanation Modal */}
+      {isVercelInfoModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 transition-all">
+          <div className="w-full max-w-lg bg-[#0b0c15] border border-white/10 hover:border-white/15 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6 text-left animate-fade-in">
+            
+            {/* Header with high contrast icon */}
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mt-1">
+                <ShieldCheck className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white tracking-wide">
+                  🛰️ 生产环境已是一体化物理固态 // Sync Status Info
+                </h3>
+                <p className="text-[10px] text-amber-400 font-mono tracking-wider">
+                  PRODUCTION ENVIRONMENT IS DYNAMICALLY & PHYSICAL CODIFIED
+                </p>
+              </div>
+            </div>
+
+            {/* Core Explanation */}
+            <div className="space-y-4 text-xs leading-relaxed text-zinc-300">
+              <p>
+                尊敬的设计师，您的在线生成网站（
+                <span className="text-[#00d2ff] font-mono font-semibold underline underline-offset-2">
+                  {window.location.hostname}
+                </span>
+                ）已经完成了面向全球访问的<strong>极速缓存与固态分发</strong>部署。不需要（并且无法）在线点击此固化按钮。
+              </p>
+
+              <div className="bg-zinc-950/70 border border-white/5 rounded-xl p-4 space-y-3.5 font-sans">
+                <div className="flex gap-2.5">
+                  <div className="text-emerald-400 font-mono font-bold mt-0.5">01</div>
+                  <div>
+                    <h4 className="text-white font-semibold text-xs mb-0.5">源码级自带原图与排版配置</h4>
+                    <p className="text-[11px] text-zinc-400 text-justify">
+                      您之前在 AI Studio 中完成的<strong>「永久源码固化/PERSISTENT SAVE」</strong>是一项由容器后端服务器直接对本地工程目录进行物理读写写实的操作，它已将您精心挑选的分类、排版模型以及原画大图直接编译打包进了静态代码库中（物理路径 <span className="text-[#00d2ff] font-mono text-[10px]">/public/db_images/</span>）。这才是最纯粹、零依赖的一体化方案。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5">
+                  <div className="text-[#0066ff] font-mono font-bold mt-0.5">02</div>
+                  <div>
+                    <h4 className="text-white font-semibold text-xs mb-0.5">只读托管安全机制 (Read-Only Static Host)</h4>
+                    <p className="text-[11px] text-zinc-400 text-justify">
+                      生产部署运行于 <strong>Vercel Edge Sandbox / Serverless Node</strong> 物理沙箱中，它是安全的<strong>“只读”</strong>运行环境，不具备修改您云端 GitHub 代码库的运行时权限。因此在这里点击该按钮会返回 <strong>404 拒绝</strong>，这是正常且符合云原生设计安全的。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5">
+                  <div className="text-amber-400 font-mono font-bold mt-0.5">03</div>
+                  <div>
+                    <h4 className="text-white font-semibold text-xs mb-0.5">如何使 Vercel 保持最新？</h4>
+                    <p className="text-[11px] text-zinc-400 text-justify">
+                      完美的闭环非常简单：您在 AI Studio 专属开发平台上可随心制作、微调并随时点击红色的「永久源码固化」按钮。AI Studio 自动会将最新写盘的代码自动推送同步到 GitHub 仓库，随后 Vercel 将会探测到最新版本并<strong>在 10 秒钟内自动完成高保真重组打包</strong>，再次访问即是完美成品，无需任何在产线二次配置。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-zinc-400 text-[11px] italic text-center">
+                “ 一次调优，物理落盘；全球加速，无感分发。 ”
+              </p>
+            </div>
+
+            {/* Trigger actions */}
+            <div className="flex items-center justify-end pt-4 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setIsVercelInfoModalOpen(false)}
+                className="w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold text-xs rounded-xl shadow-lg shadow-amber-500/10 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>🚀 我已明晰，卓越运行！ / Understood</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

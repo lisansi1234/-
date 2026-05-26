@@ -984,6 +984,106 @@ export default function AnkerBlueListingSystem({
     });
   };
 
+  const handleManualPermanentSave = async () => {
+    const toastId = addToast(
+      "uploading",
+      "🚀 正在写入底座源码 / Saving...",
+      "正在收集整站文案、全套分类排版以及当前 IndexedDB 精细无损大图，合入底座代码包中..."
+    );
+    try {
+      const dbKeys = new Set<string>();
+      projectsList.forEach(p => {
+        if (p.img && p.img.startsWith("db_img_")) {
+          dbKeys.add(p.img);
+        }
+        if (p.mainImages) {
+          p.mainImages.forEach(item => {
+            if (item.img && item.img.startsWith("db_img_")) {
+              dbKeys.add(item.img);
+            }
+          });
+        }
+        if (p.aplusBlocks) {
+          p.aplusBlocks.forEach(block => {
+            if (block.premiumImg && block.premiumImg.startsWith("db_img_")) {
+              dbKeys.add(block.premiumImg);
+            }
+            if (block.competitorImg && block.competitorImg.startsWith("db_img_")) {
+              dbKeys.add(block.competitorImg);
+            }
+            if (block.carouselSlides) {
+              block.carouselSlides.forEach(slide => {
+                if (slide.img && slide.img.startsWith("db_img_")) {
+                  dbKeys.add(slide.img);
+                }
+              });
+            }
+            if (block.gridCards) {
+              block.gridCards.forEach(card => {
+                if (card.img && card.img.startsWith("db_img_")) {
+                  dbKeys.add(card.img);
+                }
+              });
+            }
+          });
+        }
+      });
+
+      const keysArray = Array.from(dbKeys);
+      const dbImagesMap: Record<string, string> = {};
+      
+      await Promise.all(
+        keysArray.map(async (key) => {
+          try {
+            const base64 = await getFromIndexedDB(key);
+            if (base64) {
+              dbImagesMap[key] = base64;
+            }
+          } catch (e) {
+            console.error("Failed to read image for custom save key:", key, e);
+          }
+        })
+      );
+
+      const localStorageDump: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("ae_") || key.startsWith("anker_"))) {
+          const val = localStorage.getItem(key);
+          if (val !== null) {
+            localStorageDump[key] = val;
+          }
+        }
+      }
+
+      localStorageDump["anker_blue_projects_v2"] = JSON.stringify(projectsList);
+      localStorageDump["anker_blue_categories_v2"] = JSON.stringify(categories);
+      localStorageDump["anker_current_category_v2"] = currentCategory;
+      localStorageDump["anker_active_project_id_v2"] = String(activeProjectId);
+
+      const response = await fetch("/api/save-defaults", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ localStorageDump, dbImagesMap })
+      });
+
+      removeToast(toastId);
+      if (response.ok) {
+        addToast(
+          "success",
+          "🚀 永久源码固化成功 / Permanently Written !",
+          "已成功将您当前的全部高清大图、自定义分类排版及文案淬炼并同步写入项目本地代码中！当您重新部署到 Vercel 后，世界上任何电脑和手机打开您的网址都将默认显示完美的本站定制内容，无需手动导入恢复！"
+        );
+      } else {
+        addToast("error", "写入失败", "开发服务器响应异常，请确保开发服务正常运转。");
+      }
+    } catch (err) {
+      removeToast(toastId);
+      console.error(err);
+      addToast("error", "源码固化失败", "无法通过 API 写入底层代码。");
+    }
+  };
+
   const sendWorkspaceToBackendPermanentSave = async (
     customProjectsList: any, 
     customCategories: any, 
@@ -4217,6 +4317,15 @@ Module #${i + 1}: ${b.title}
           <div className="space-y-2 border-b border-white/5 pb-3">
             <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest block font-bold">// CLOUD BACKUP & SYNC / 全站已上传作品同步</span>
             <div className="space-y-1.5">
+              <button 
+                type="button"
+                onClick={handleManualPermanentSave}
+                className="w-full py-2 bg-gradient-to-r from-rose-500/20 to-orange-500/25 hover:from-rose-500/30 hover:to-orange-500/35 border border-rose-500/40 hover:border-rose-400/50 text-rose-300 rounded-lg text-[10px] font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse"
+                title="固化代码：直接将目前全部作品、排版、微调修改和高清原图直接同步写底座源码中，下一次部署 Vercel 后世界各地打开都默认是此定制版！"
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-bounce text-rose-400 font-bold" />
+                <span>🚀 永久源码固化 / PERSISTENT SAVE</span>
+              </button>
               <button 
                 type="button"
                 onClick={handleExportWorkspaceJson}

@@ -780,9 +780,16 @@ export default function AnkerBlueListingSystem({
     return () => window.removeEventListener("ae_theme_accent_changed", handleAccentChange);
   }, []);
 
-  const [projectsList, setProjectsList] = useState<PortfolioProject[]>(() => {
+   const [projectsList, setProjectsList] = useState<PortfolioProject[]>(() => {
     const saved = localStorage.getItem("anker_blue_projects_v2");
-    if (saved) return JSON.parse(saved);
+    if (saved && !saved.includes("blob:")) return JSON.parse(saved);
+    if (saved) {
+      console.warn("Retrieved project list containing expired blob links. Purging local storage.");
+      localStorage.removeItem("anker_blue_projects_v2");
+      localStorage.removeItem("anker_blue_categories_v2");
+      localStorage.removeItem("anker_current_category_v2");
+      localStorage.removeItem("anker_active_project_id_v2");
+    }
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_blue_projects_v2;
     if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
     return DEFAULT_PROJECTS;
@@ -790,7 +797,7 @@ export default function AnkerBlueListingSystem({
 
   const [categories, setCategories] = useState<CategoryItem[]>(() => {
     const saved = localStorage.getItem("anker_blue_categories_v2");
-    if (saved) return JSON.parse(saved);
+    if (saved && !saved.includes("blob:")) return JSON.parse(saved);
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_blue_categories_v2;
     if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
     return DEFAULT_CATEGORIES;

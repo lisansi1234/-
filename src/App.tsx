@@ -23,6 +23,24 @@ import DeletableWrapper from "./components/DeletableWrapper";
 import persistedDefaults from "./data/persisted_defaults.json";
 import { setGlobalDynamicDefaults } from "./components/AnkerBlueListingSystem";
 
+// --- SELF-HEALING SYSTEM: PURGE STALE EXPIRED BLOB CACHE ---
+try {
+  if (typeof window !== "undefined" && window.localStorage) {
+    const keysToCheck = Object.keys(localStorage);
+    keysToCheck.forEach((key) => {
+      if (key.startsWith("ae_") || key.startsWith("anker_")) {
+        const value = localStorage.getItem(key);
+        if (value && value.includes("blob:")) {
+          console.warn(`[Self-Healing] Purged stale localStorage key containing expired blob: ${key}`);
+          localStorage.removeItem(key);
+        }
+      }
+    });
+  }
+} catch (err) {
+  console.error("[Self-Healing] LocalStorage sanitizer failed:", err);
+}
+
 interface SiteBlock {
   id: string;
   label: string;

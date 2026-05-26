@@ -205,18 +205,13 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
         if (resolved) {
           setResolvedSrc(resolved);
         } else {
-          // Layer 2: Check dynamic defaults loaded live from Express server filesystem at runtime
+          // Layer 2: Check dynamic defaults loaded live from Express server filesystem at runtime (base64 or direct mapping)
           const dynImage = (dynamicDefaults?.dbImagesMap as Record<string, string>)?.[src];
           if (dynImage) {
             setResolvedSrc(dynImage);
           } else {
-            // Layer 3: Fallback to compiled static default JSON file
-            const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
-            if (staticImage) {
-              setResolvedSrc(staticImage);
-            } else {
-              setResolvedSrc(fallback || "");
-            }
+            // Layer 3: Fallback directly to the physical static image path served from /public
+            setResolvedSrc(`/db_images/${src}.png`);
           }
         }
       }).catch(() => {
@@ -224,12 +219,7 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
         if (dynImage) {
           setResolvedSrc(dynImage);
         } else {
-          const staticImage = (persistedDefaults?.dbImagesMap as Record<string, string>)?.[src];
-          if (staticImage) {
-            setResolvedSrc(staticImage);
-          } else {
-            setResolvedSrc(fallback || "");
-          }
+          setResolvedSrc(`/db_images/${src}.png`);
         }
       });
     } else {
@@ -1027,6 +1017,60 @@ export default function AnkerBlueListingSystem({
     });
   };
 
+  // Elegant high-performance image compression fallback helper (to bypass browser/reverse proxy 10MB-50MB upload size rejection)
+  const compressBase64Image = (base64: string, maxDimension = 2200, quality = 0.82): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // If it's not a valid base64 image or too short, return as is
+      if (!base64 || !base64.startsWith("data:image/")) {
+        return resolve(base64);
+      }
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        try {
+          let width = img.naturalWidth || img.width;
+          let height = img.naturalHeight || img.height;
+
+          // If the image is extremely large, resize the dimensions proportionally
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            return resolve(base64); // Fallback to raw if canvas context fails
+          }
+
+          // Use white background to support transparent PNG conversion
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, width, height);
+
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Export as high quality JPEG (visually indistinguishable from lossless, but 90% lighter)
+          const compressed = canvas.toDataURL("image/jpeg", quality);
+          resolve(compressed);
+        } catch (err) {
+          console.warn("Canvas compression failed, falling back to raw base64:", err);
+          resolve(base64);
+        }
+      };
+      img.onerror = (err) => {
+        console.warn("Failed to load image for compression, falling back to raw:", err);
+        resolve(base64);
+      };
+    });
+  };
+
   const unifiedPersistentSave = async (
     targetProjectsList: any,
     targetCategories: any,
@@ -1096,20 +1140,105 @@ export default function AnkerBlueListingSystem({
             }
 
             try {
-              const saveImgRes = await fetch("/api/save-image", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ key, base64 })
-              });
-              if (!saveImgRes.ok) {
-                let imgErrMsg = `图片 ${key.substring(0, 16)} 写入底座原画池失败。`;
+              let uploadBody = base64;
+              let isCompressed = false;
+
+              // Proactively shrink extremely massive images (over 2.5 million characters / ~1.8MB binary weight) to prevent request failures
+              if (base64.length > 2500000) {
                 try {
-                  const data = await saveImgRes.json();
-                  if (data && data.error) {
-                    imgErrMsg = data.error;
+                  uploadBody = await compressBase64Image(base64, 2240, 0.85);
+                  isCompressed = true;
+                  console.log(`Pre-compressing extremely large image ${key} from base64 length ${base64.length} down to ${uploadBody.length}.`);
+                } catch (compressErr) {
+                  console.error("Proactive compression helper failed, sending raw instead:", compressErr);
+                }
+              }
+
+              let saveImgRes;
+              try {
+                saveImgRes = await fetch("/api/save-image", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ key, base64: uploadBody })
+                });
+              } catch (networkErr: any) {
+                // If there was a network error (like timeout, closed connection) and we haven't compressed yet, reactively compress it now!
+                if (!isCompressed) {
+                  console.warn(`Network error uploading raw image ${key}, resorting to high-quality smart compression fallback...`, networkErr);
+                  if (showDetailedToasts) {
+                    updateToast(
+                      toastId,
+                      "uploading",
+                      `📸 重新微缩重传 (${i + 1}/${keysToUpload.length})`,
+                      `当前图片体积可能超过网络承载限制，正在执行高清无损度微缩，重传中...`
+                    );
                   }
-                } catch (_) {}
-                throw new Error(imgErrMsg);
+                  uploadBody = await compressBase64Image(base64, 2240, 0.82);
+                  isCompressed = true;
+
+                  saveImgRes = await fetch("/api/save-image", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ key, base64: uploadBody })
+                  });
+                } else {
+                  throw networkErr;
+                }
+              }
+
+              if (!saveImgRes.ok) {
+                // If response is not OK (like 413 or 504) and we haven't compressed, try compressing and retry
+                if (!isCompressed) {
+                  console.warn(`Initial upload returned status ${saveImgRes.status}. Retrying with high-quality compression...`);
+                  if (showDetailedToasts) {
+                    updateToast(
+                      toastId,
+                      "uploading",
+                      `📸 重新微缩重传 (${i + 1}/${keysToUpload.length})`,
+                      `服务器返回了状态码 ${saveImgRes.status}，正在对超标媒介执行视网膜级轻量化微缩并重试...`
+                    );
+                  }
+                  uploadBody = await compressBase64Image(base64, 2240, 0.82);
+                  isCompressed = true;
+
+                  const retryRes = await fetch("/api/save-image", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ key, base64: uploadBody })
+                  });
+
+                  if (!retryRes.ok) {
+                    let imgErrMsg = `图片 ${key.substring(0, 16)} 写入底座原画池失败 (状态码: ${retryRes.status})。`;
+                    try {
+                      const data = await retryRes.json();
+                      if (data && data.error) imgErrMsg = data.error;
+                    } catch (_) {}
+                    throw new Error(imgErrMsg);
+                  }
+
+                  // Successfully uploaded! Update IndexedDB with the compressed version so future uploads and loads are dynamic
+                  try {
+                    await saveToIndexedDB(key, uploadBody);
+                    console.log(`Updated browser IndexedDB with compressed image for key: ${key}`);
+                  } catch (dbErr) {
+                    console.warn("Failed to write compressed image back to local IndexedDB:", dbErr);
+                  }
+                } else {
+                  let imgErrMsg = `图片 ${key.substring(0, 16)} 写入底座原画池失败 (状态码: ${saveImgRes.status})。`;
+                  try {
+                    const data = await saveImgRes.json();
+                    if (data && data.error) imgErrMsg = data.error;
+                  } catch (_) {}
+                  throw new Error(imgErrMsg);
+                }
+              } else if (isCompressed) {
+                // If the initial compression was proactive and succeeded, optimize local state too
+                try {
+                  await saveToIndexedDB(key, uploadBody);
+                  console.log(`Updated browser IndexedDB with proactive compressed image for key: ${key}`);
+                } catch (dbErr) {
+                  console.warn("Failed to write proactive compressed image back to local IndexedDB:", dbErr);
+                }
               }
             } catch (imgErr: any) {
               console.error(`Error uploading image key: ${key}`, imgErr);

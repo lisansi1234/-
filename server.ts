@@ -307,10 +307,30 @@ app.post("/api/portfolio/chat", async (req, res) => {
   }
 });
 
+// Helper to get image keys from the public/db_images folder
+function getExistingDbImageKeys(): Record<string, string> {
+  const imagesMap: Record<string, string> = {};
+  const dbImagesDir = path.join(process.cwd(), "public", "db_images");
+  if (fs.existsSync(dbImagesDir)) {
+    try {
+      const files = fs.readdirSync(dbImagesDir);
+      files.forEach(file => {
+        if (file.startsWith("db_img_")) {
+          const key = path.basename(file, path.extname(file)); // key = db_img_177969087
+          imagesMap[key] = `/db_images/${file}`;
+        }
+      });
+    } catch (err) {
+      console.warn("Error reading db_images dir:", err);
+    }
+  }
+  return imagesMap;
+}
+
 // API Endpoint to write current client layout and text customizations directly into source code files
 app.post("/api/save-defaults", (req, res) => {
   try {
-    const { localStorageDump, dbImagesMap } = req.body;
+    const { localStorageDump } = req.body;
     if (!localStorageDump) {
       return res.status(400).json({ error: "Missing layout customization payload" });
     }
@@ -321,25 +341,6 @@ app.post("/api/save-defaults", (req, res) => {
     }
 
     const filePath = path.join(dataDir, "persisted_defaults.json");
-    let existingDbImagesMap: Record<string, string> = {};
-
-    if (fs.existsSync(filePath)) {
-      try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.dbImagesMap) {
-          existingDbImagesMap = parsed.dbImagesMap;
-        }
-      } catch (err) {
-        console.warn("Failed to check existing persisted_defaults.json images:", err);
-      }
-    }
-
-    // Merge incoming images with existing ones
-    let finalDbImagesMap = { ...existingDbImagesMap };
-    if (dbImagesMap && Object.keys(dbImagesMap).length > 0) {
-      finalDbImagesMap = { ...finalDbImagesMap, ...dbImagesMap };
-    }
 
     // Prune images that are no longer referenced in the saved projects list to prevent bloating the package
     let projectsList: any[] = [];
@@ -391,17 +392,30 @@ app.post("/api/save-defaults", (req, res) => {
         }
       });
 
-      // Filter and delete orphaned images that are no longer referenced
-      Object.keys(finalDbImagesMap).forEach((key) => {
-        if (!activeKeys.has(key)) {
-          delete finalDbImagesMap[key];
+      // Filter and delete physical image files no longer referenced
+      const dbImagesDir = path.join(process.cwd(), "public", "db_images");
+      if (fs.existsSync(dbImagesDir)) {
+        try {
+          const files = fs.readdirSync(dbImagesDir);
+          files.forEach(file => {
+            if (file.startsWith("db_img_")) {
+              const key = path.basename(file, path.extname(file));
+              if (!activeKeys.has(key)) {
+                fs.unlinkSync(path.join(dbImagesDir, file));
+                console.log(`Pruned physical image: ${file}`);
+              }
+            }
+          });
+        } catch (pruneErr) {
+          console.warn("Failed to prune physical image files:", pruneErr);
         }
-      });
+      }
     }
 
+    // Keep dbImagesMap EMPTY inside persisted_defaults.json to keep it extremely lightweight
     const payload = {
       localStorageDump,
-      dbImagesMap: finalDbImagesMap
+      dbImagesMap: {}
     };
 
     fs.writeFileSync(
@@ -410,7 +424,7 @@ app.post("/api/save-defaults", (req, res) => {
       "utf-8"
     );
 
-    console.log(`Successfully persisted active state to persisted_defaults.json! Saved ${Object.keys(finalDbImagesMap).length} images.`);
+    console.log(`Successfully persisted active state details to persisted_defaults.json!`);
     return res.json({ 
       success: true, 
       message: "Custom database defaults committed directly to local repository! (成功将最新站存数据永久淬炼进本地仓库代码)" 
@@ -424,14 +438,14 @@ app.post("/api/save-defaults", (req, res) => {
     
     if (isReadOnly) {
       return res.status(500).json({ 
-        error: "检测到当前运行在只读生产环境 (如 Vercel 部署)。\n\n「永久源码固化 / Persistent Save」必须在 AI Studio 开发平台或本地开发中运行，因为它需要直接写入项目工程的 \`src/data/persisted_defaults.json\` 文件。\n\n💡 完美解决方案：\n1. 请在您的 **AI Studio 蓝图开发面板** 中点击此按钮 (永久源码固化)。\n2. 点击后，开发平台会自动将定制图像、分类排版淬炼并编译写入本地代码底座中。此时您再次推送至 GitHub/重新触发 Vercel 部署，生产环境就会一劳永逸加载本套默认站存，全球访问无需手动导入备份！" 
+        error: "检测到当前运行在只读生产环境 (如 Vercel 部署)。\n\n「永久源码固化 / Persistent Save」必须在 AI Studio 开发平台或本地开发中运行，因为它需要直接写入项目工程的文件。\n\n💡 完美解决方案：\n1. 请在您的 **AI Studio 蓝图开发面板** 中点击此按钮 (永久源码固化)。\n2. 点击后，开发平台会自动将定制图像、分类排版淬炼并编译写入本地代码底座中。此时您再次推送至 GitHub/重新触发 Vercel 部署，生产环境就会一劳永逸加载本套默认站存，全球访问无需手动导入备份！" 
       });
     }
     return res.status(500).json({ error: err.message || "Failed to commit layout changes to repository." });
   }
 });
 
-// API Endpoint to write a single custom image into raw persisted defaults directly on the server to bypass network payload body-size limitations
+// API Endpoint to write a single custom image directly as a physical file on the server
 app.post("/api/save-image", (req, res) => {
   try {
     const { key, base64 } = req.body;
@@ -439,31 +453,26 @@ app.post("/api/save-image", (req, res) => {
       return res.status(400).json({ error: "Missing image key or base64 data" });
     }
 
-    const dataDir = path.join(process.cwd(), "src", "data");
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    const publicDir = path.join(process.cwd(), "public");
+    const dbImagesDir = path.join(publicDir, "db_images");
+    if (!fs.existsSync(dbImagesDir)) {
+      fs.mkdirSync(dbImagesDir, { recursive: true });
     }
 
-    const filePath = path.join(dataDir, "persisted_defaults.json");
-    let payload: any = { localStorageDump: {}, dbImagesMap: {} };
-
-    if (fs.existsSync(filePath)) {
-      try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        payload = JSON.parse(raw);
-      } catch (err) {
-        console.warn("Failed to check existing persisted_defaults.json for save-image:", err);
-      }
+    // Decode base64 to binary buffer
+    const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    let buffer: Buffer;
+    if (matches && matches.length === 3) {
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      buffer = Buffer.from(base64, 'base64');
     }
 
-    if (!payload.dbImagesMap) {
-      payload.dbImagesMap = {};
-    }
+    const filePath = path.join(dbImagesDir, `${key}.png`);
+    fs.writeFileSync(filePath, buffer);
 
-    payload.dbImagesMap[key] = base64;
-
-    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
-    return res.json({ success: true, message: `Image ${key} saved successfully.` });
+    console.log(`Successfully saved image physically to: /public/db_images/${key}.png`);
+    return res.json({ success: true, message: `Image ${key} physically saved successfully.` });
   } catch (err: any) {
     console.error("Save single image error:", err);
     const isReadOnly = err.code === "EROFS" || 
@@ -473,7 +482,7 @@ app.post("/api/save-image", (req, res) => {
     
     if (isReadOnly) {
       return res.status(500).json({ 
-        error: "检测到当前运行在只读生产环境 (如 Vercel 部署)。\n\n「永久源码固化 / Persistent Save」必须在 AI Studio 开发平台或本地开发中运行，因为它需要直接写入项目工程的 \`src/data/persisted_defaults.json\` 文件。\n\n💡 完美解决方案：\n1. 请在您的 **AI Studio 蓝图开发面板** 中点击此按钮 (永久源码固化)。\n2. 点击后，开发平台会自动将定制图像、分类排版淬炼并编译写入本地代码底座中。此时您再次推送至 GitHub/重新触发 Vercel 部署，生产环境就会一劳永逸加载本套默认站存，全球访问无需手动导入备份！" 
+        error: "检测到当前运行在只读生产环境 (如 Vercel 部署)。\n\n「永久源码固化 / Persistent Save」必须在 AI Studio 开发平台或本地开发中运行，因为它需要直接写入项目工程文件...\n\n💡 完美解决方案：\n1. 请在您的 **AI Studio 蓝图开发面板** 中点击此按钮 (永久源码固化)。\n2. 点击后，开发平台会自动将定制图像、分类排版淬炼并编译写入本地代码底座中。此时您再次推送至 GitHub/重新触发 Vercel 部署，生产环境就会一劳永逸加载本套默认站存，全球访问无需手动导入备份！" 
       });
     }
     return res.status(500).json({ error: err.message || "Failed to save the image to repository defaults." });
@@ -484,11 +493,14 @@ app.post("/api/save-image", (req, res) => {
 app.get("/api/get-defaults", (req, res) => {
   try {
     const filePath = path.join(process.cwd(), "src", "data", "persisted_defaults.json");
+    let payload: any = { localStorageDump: {}, dbImagesMap: {} };
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, "utf-8");
-      return res.json(JSON.parse(data));
+      payload = JSON.parse(data);
     }
-    return res.json({});
+    // Mix in the existing physical image files so frontend knows what is already saved!
+    payload.dbImagesMap = { ...payload.dbImagesMap, ...getExistingDbImageKeys() };
+    return res.json(payload);
   } catch (err: any) {
     console.error("Get defaults error:", err);
     return res.status(500).json({ error: "Failed to load up-to-date defaults from storage" });

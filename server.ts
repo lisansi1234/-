@@ -327,6 +327,74 @@ function getExistingDbImageKeys(): Record<string, string> {
   return imagesMap;
 }
 
+// Helper to deduce image file keys from both 'db_img_xxxx' and '/db_images/db_img_xxxx' string parameters
+function extractDbKey(str: any): string | null {
+  if (typeof str !== "string") return null;
+  if (str.startsWith("db_img_")) return str;
+  if (str.includes("/db_images/db_img_")) {
+    const parts = str.split("/db_images/");
+    if (parts.length > 1) {
+      const filename = parts[1];
+      return path.basename(filename, path.extname(filename));
+    }
+  }
+  return null;
+}
+
+// Helper to recursively traverse and extract base64 images from JSON structure, saving them physically to disk
+function extractAndReplaceBase64Images(obj: any, dbImagesDir: string): any {
+  if (typeof obj === "string") {
+    if (obj.startsWith("data:image/") && obj.includes(";base64,")) {
+      const key = "db_img_extracted_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
+      try {
+        const matches = obj.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        let buffer: Buffer;
+        if (matches && matches.length === 3) {
+          buffer = Buffer.from(matches[2], "base64");
+        } else {
+          buffer = Buffer.from(obj, "base64");
+        }
+        
+        if (!fs.existsSync(dbImagesDir)) {
+          fs.mkdirSync(dbImagesDir, { recursive: true });
+        }
+        
+        const filePath = path.join(dbImagesDir, `${key}.png`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Physically extracted base64 image and saved to: /public/db_images/${key}.png`);
+        return `/db_images/${key}.png`;
+      } catch (err) {
+        console.error("Failed to extract base64 image in recursive traverser:", err);
+        return obj;
+      }
+    }
+    
+    // Check if the string itself is a stringified JSON array or object (common in localStorage values)
+    if (obj.startsWith("[") || obj.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(obj);
+        const processed = extractAndReplaceBase64Images(parsed, dbImagesDir);
+        return JSON.stringify(processed);
+      } catch (e) {
+        // Not a JSON string after all, return as is
+        return obj;
+      }
+    }
+    return obj;
+  } else if (Array.isArray(obj)) {
+    return obj.map(item => extractAndReplaceBase64Images(item, dbImagesDir));
+  } else if (obj !== null && typeof obj === "object") {
+    const newObj: any = {};
+    for (const k in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, k)) {
+        newObj[k] = extractAndReplaceBase64Images(obj[k], dbImagesDir);
+      }
+    }
+    return newObj;
+  }
+  return obj;
+}
+
 // API Endpoint to write current client layout and text customizations directly into source code files
 app.post("/api/save-defaults", (req, res) => {
   try {
@@ -340,12 +408,22 @@ app.post("/api/save-defaults", (req, res) => {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
+    const publicDir = path.join(process.cwd(), "public");
+    const dbImagesDir = path.join(publicDir, "db_images");
+    if (!fs.existsSync(dbImagesDir)) {
+      fs.mkdirSync(dbImagesDir, { recursive: true });
+    }
+
     const filePath = path.join(dataDir, "persisted_defaults.json");
 
-    // Prune images that are no longer referenced in the saved projects list to prevent bloating the package
+    // 1. Process and extract any raw base64 images that may be in the payload, transforming them to lightweight file URLs
+    console.log("Analyzing payload for base64 images to compress and save...");
+    const cleanedLocalStorageDump = extractAndReplaceBase64Images(localStorageDump, dbImagesDir);
+
+    // 2. Prune images that are no longer referenced in the saved projects list to prevent bloating the package
     let projectsList: any[] = [];
     try {
-      const projectsRaw = localStorageDump["anker_blue_projects_v2"];
+      const projectsRaw = cleanedLocalStorageDump["anker_blue_projects_v2"];
       if (projectsRaw) {
         projectsList = JSON.parse(projectsRaw);
       }
@@ -355,37 +433,33 @@ app.post("/api/save-defaults", (req, res) => {
 
     if (projectsList && projectsList.length > 0) {
       const activeKeys = new Set<string>();
-      projectsList.forEach((p: any) => {
-        if (p.img && p.img.startsWith("db_img_")) {
-          activeKeys.add(p.img);
+      
+      const addActiveKey = (val: any) => {
+        const key = extractDbKey(val);
+        if (key) {
+          activeKeys.add(key);
         }
+      };
+
+      projectsList.forEach((p: any) => {
+        if (p.img) addActiveKey(p.img);
         if (p.mainImages) {
           p.mainImages.forEach((item: any) => {
-            if (item.img && item.img.startsWith("db_img_")) {
-              activeKeys.add(item.img);
-            }
+            if (item.img) addActiveKey(item.img);
           });
         }
         if (p.aplusBlocks) {
           p.aplusBlocks.forEach((block: any) => {
-            if (block.premiumImg && block.premiumImg.startsWith("db_img_")) {
-              activeKeys.add(block.premiumImg);
-            }
-            if (block.competitorImg && block.competitorImg.startsWith("db_img_")) {
-              activeKeys.add(block.competitorImg);
-            }
+            if (block.premiumImg) addActiveKey(block.premiumImg);
+            if (block.competitorImg) addActiveKey(block.competitorImg);
             if (block.carouselSlides) {
               block.carouselSlides.forEach((slide: any) => {
-                if (slide.img && slide.img.startsWith("db_img_")) {
-                  activeKeys.add(slide.img);
-                }
+                if (slide.img) addActiveKey(slide.img);
               });
             }
             if (block.gridCards) {
               block.gridCards.forEach((card: any) => {
-                if (card.img && card.img.startsWith("db_img_")) {
-                  activeKeys.add(card.img);
-                }
+                if (card.img) addActiveKey(card.img);
               });
             }
           });
@@ -393,7 +467,6 @@ app.post("/api/save-defaults", (req, res) => {
       });
 
       // Filter and delete physical image files no longer referenced
-      const dbImagesDir = path.join(process.cwd(), "public", "db_images");
       if (fs.existsSync(dbImagesDir)) {
         try {
           const files = fs.readdirSync(dbImagesDir);
@@ -414,7 +487,7 @@ app.post("/api/save-defaults", (req, res) => {
 
     // Keep dbImagesMap EMPTY inside persisted_defaults.json to keep it extremely lightweight
     const payload = {
-      localStorageDump,
+      localStorageDump: cleanedLocalStorageDump,
       dbImagesMap: {}
     };
 

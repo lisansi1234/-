@@ -1,15 +1,11 @@
 import { CaseStudy, SiteMapNode } from "./types";
-import regeneratedImage1779358129423 from "./assets/images/regenerated_image_1779358129423.jpg";
-import regeneratedImage1779358241231 from "./assets/images/regenerated_image_1779358241231.jpg";
-import regeneratedImage1779358272739 from "./assets/images/regenerated_image_1779358272739.jpg";
-
 export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
   {
     id: "delta-ion",
     title: "DELTA-ION PRO // 德尔塔-离子航天级移动电源",
     category: "Hardcore Tech / Solar Power [硬核科技 / 太阳能储能]",
     tagline: "Industrializing wattage output for the digital nomad | 为全球数字游民工业化重构电能输出。",
-    description: "An elite visual re-engineering for high-capacity battery packs. We replaced uninspired plastics with structural sandblasted aluminum and glowing custom venting pipelines to solve consumer thermal safety doubts. / 高容量电池组的视觉重构。我们用磨砂氧化铝结构和发光散热管道替代了平庸的塑料外壳，瞬间打消消费者对安全性疑虑，奠定科技质感。",
+    description: "An elite visual re-engineering for high-capacity battery packs. We replaced uninspired plastics with structural sandblasted aluminum and glowing custom venting pipelines to solve consumer thermal safety doubts. / 高容量电池组的视觉重构。我们用磨砂氧化铝结构 and 发光散热管道替代了平庸的塑料外壳，瞬间打消消费者对安全性疑虑，奠定科技质感。",
     stats: [
       { label: "Click-Through Rate (CTR) 点击率", value: "+94% CTR Gain [点击率增幅]", detail: "A/B tested against original listing / 相比普通首图A/B测试" },
       { label: "Amazon Conversion Rate 转化率", value: "34.2% Peak [极限转化率]", detail: "Significant boost in conversion category / 同品类转化率巅峰指标" },
@@ -17,7 +13,7 @@ export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
     ],
     technicalTerm: "Thermal Backlight / 逆光环形框",
     materials: ["CNC-6061 Anodized Aluminum 阳极氧化铝", "Optic Glass Enclosure 光学钢化玻璃", "V-0 Flame-Retardant Polymer V0防爆高聚物"],
-    imageUrl: regeneratedImage1779358129423
+    imageUrl: "/assets/images/regenerated_image_1779358129423.jpg"
   },
   {
     id: "aero-capsule",
@@ -32,7 +28,7 @@ export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
     ],
     technicalTerm: "Macro Depth / 宏观景深分离",
     materials: ["Translucent Toughened Silica 钢化透明硅胶", "Beryllium-Coated Film 高附着铍涂层", "Sputtered Aurum Contacts 溅射金触点"],
-    imageUrl: regeneratedImage1779358241231
+    imageUrl: "/assets/images/regenerated_image_1779358241231.jpg"
   },
   {
     id: "titan-rig",
@@ -41,13 +37,13 @@ export const PORTFOLIO_CASE_STUDIES: CaseStudy[] = [
     tagline: "Uncompromising input weight designed for creators | 为极客创作者而生的无妥协机械输入重器。",
     description: "Emphasizing physical density and technical feedback. Highlights include high-mass iron frame backboards, isolated gasket suspension columns, and individual switches catching laser light sweeps. We targeted high-end software developers and mechanical layout purists. / 强物理量感与触觉阻尼。采用高配重钢制定位板、硅胶隔离垫片悬吊及定制磨砂PBT键帽。专为精细创作者与代码极客打造，营造顶级客制化细节体验。",
     stats: [
-      { label: "Page Views Time 停留时长", value: "+180 sec [页面驻留多3分钟]", detail: "Customers spent longer gazing at A+ / 消费者在详情页的黄金视区平均多停留" },
+      { label: "Page Views Time 停留时长", value: "+180 sec [页面驻留多3分钟]", detail: "Customers spent longer gazing at A+ / 消费者在详情页 of 黄金视区平均多停留" },
       { label: "Conversion Lift 转化倍数", value: "4.8x Higher [转化增幅达4.8倍]", detail: "Compared to default brand layout / 相比出厂默认基础白底图" },
       { label: "Cart Add Rate 加购留存", value: "28% Rise [加购比率拉升]", detail: "Directly attributed to high-fidelity videos / 得益于视频渲染与动态材料解析" }
     ],
     technicalTerm: "Cinematic Laser Scan / 激光扫掠",
     materials: ["Laser-Welded Spring Steel 激光焊接绷钢", "Poron Polyurethane Compound 进口Poron发泡消音棉", "High-Density PBT Keycaps 高克重PBT热升华键帽"],
-    imageUrl: regeneratedImage1779358272739
+    imageUrl: "/assets/images/regenerated_image_1779358272739.jpg"
   }
 ];
 

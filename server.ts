@@ -307,31 +307,38 @@ app.post("/api/portfolio/chat", async (req, res) => {
   }
 });
 
-// Helper to get image keys from the public/db_images folder
+// Helper to get image keys from the public/assets/images folder
 function getExistingDbImageKeys(): Record<string, string> {
   const imagesMap: Record<string, string> = {};
-  const dbImagesDir = path.join(process.cwd(), "public", "db_images");
+  const dbImagesDir = path.join(process.cwd(), "public", "assets", "images");
   if (fs.existsSync(dbImagesDir)) {
     try {
       const files = fs.readdirSync(dbImagesDir);
       files.forEach(file => {
-        if (file.startsWith("db_img_")) {
-          const key = path.basename(file, path.extname(file)); // key = db_img_177969087
-          imagesMap[key] = `/db_images/${file}`;
+        if (file.startsWith("db_img_") || file.startsWith("regenerated_image_")) {
+          const key = path.basename(file, path.extname(file));
+          imagesMap[key] = `/assets/images/${file}`;
         }
       });
     } catch (err) {
-      console.warn("Error reading db_images dir:", err);
+      console.warn("Error reading assets/images dir:", err);
     }
   }
   return imagesMap;
 }
 
-// Helper to deduce image file keys from both 'db_img_xxxx' and '/db_images/db_img_xxxx' string parameters
+// Helper to deduce image file keys from string parameters
 function extractDbKey(str: any): string | null {
   if (typeof str !== "string") return null;
   if (str.startsWith("db_img_")) return str;
-  if (str.includes("/db_images/db_img_")) {
+  if (str.includes("/assets/images/")) {
+    const parts = str.split("/assets/images/");
+    if (parts.length > 1) {
+      const filename = parts[1];
+      return path.basename(filename, path.extname(filename));
+    }
+  }
+  if (str.includes("/db_images/")) {
     const parts = str.split("/db_images/");
     if (parts.length > 1) {
       const filename = parts[1];
@@ -342,7 +349,10 @@ function extractDbKey(str: any): string | null {
 }
 
 // Helper to recursively traverse and extract base64 images from JSON structure, saving them physically to disk
+// Use assets/images as the destination directory
 function extractAndReplaceBase64Images(obj: any, dbImagesDir: string): any {
+  // Always write to process.cwd()/public/assets/images
+  const targetDir = path.join(process.cwd(), "public", "assets", "images");
   if (typeof obj === "string") {
     if (obj.startsWith("data:image/") && obj.includes(";base64,")) {
       const key = "db_img_extracted_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
@@ -355,14 +365,14 @@ function extractAndReplaceBase64Images(obj: any, dbImagesDir: string): any {
           buffer = Buffer.from(obj, "base64");
         }
         
-        if (!fs.existsSync(dbImagesDir)) {
-          fs.mkdirSync(dbImagesDir, { recursive: true });
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
         }
         
-        const filePath = path.join(dbImagesDir, `${key}.png`);
+        const filePath = path.join(targetDir, `${key}.png`);
         fs.writeFileSync(filePath, buffer);
-        console.log(`Physically extracted base64 image and saved to: /public/db_images/${key}.png`);
-        return `/db_images/${key}.png`;
+        console.log(`Physically extracted base64 image and saved to: /public/assets/images/${key}.png`);
+        return `/assets/images/${key}.png`;
       } catch (err) {
         console.error("Failed to extract base64 image in recursive traverser:", err);
         return obj;
@@ -373,7 +383,7 @@ function extractAndReplaceBase64Images(obj: any, dbImagesDir: string): any {
     if (obj.startsWith("[") || obj.startsWith("{")) {
       try {
         const parsed = JSON.parse(obj);
-        const processed = extractAndReplaceBase64Images(parsed, dbImagesDir);
+        const processed = extractAndReplaceBase64Images(parsed, targetDir);
         return JSON.stringify(processed);
       } catch (e) {
         // Not a JSON string after all, return as is
@@ -382,12 +392,12 @@ function extractAndReplaceBase64Images(obj: any, dbImagesDir: string): any {
     }
     return obj;
   } else if (Array.isArray(obj)) {
-    return obj.map(item => extractAndReplaceBase64Images(item, dbImagesDir));
+    return obj.map(item => extractAndReplaceBase64Images(item, targetDir));
   } else if (obj !== null && typeof obj === "object") {
     const newObj: any = {};
     for (const k in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, k)) {
-        newObj[k] = extractAndReplaceBase64Images(obj[k], dbImagesDir);
+        newObj[k] = extractAndReplaceBase64Images(obj[k], targetDir);
       }
     }
     return newObj;
@@ -409,7 +419,7 @@ app.post("/api/save-defaults", (req, res) => {
     }
 
     const publicDir = path.join(process.cwd(), "public");
-    const dbImagesDir = path.join(publicDir, "db_images");
+    const dbImagesDir = path.join(publicDir, "assets", "images");
     if (!fs.existsSync(dbImagesDir)) {
       fs.mkdirSync(dbImagesDir, { recursive: true });
     }
@@ -540,7 +550,7 @@ app.post("/api/save-image", (req, res) => {
     }
 
     const publicDir = path.join(process.cwd(), "public");
-    const dbImagesDir = path.join(publicDir, "db_images");
+    const dbImagesDir = path.join(publicDir, "assets", "images");
     if (!fs.existsSync(dbImagesDir)) {
       fs.mkdirSync(dbImagesDir, { recursive: true });
     }
@@ -557,7 +567,7 @@ app.post("/api/save-image", (req, res) => {
     const filePath = path.join(dbImagesDir, `${key}.png`);
     fs.writeFileSync(filePath, buffer);
 
-    console.log(`Successfully saved image physically to: /public/db_images/${key}.png`);
+    console.log(`Successfully saved image physically to: /public/assets/images/${key}.png`);
     return res.json({ success: true, message: `Image ${key} physically saved successfully.` });
   } catch (err: any) {
     console.error("Save single image error:", err);

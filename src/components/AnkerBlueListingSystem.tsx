@@ -215,7 +215,7 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
             setResolvedSrc(dynImage);
           } else {
             // Layer 3: Fallback directly to the physical static image path served from /public
-            setResolvedSrc(`/db_images/${src}.png`);
+            setResolvedSrc(`/assets/images/${src}.png`);
           }
         }
       }).catch(() => {
@@ -223,7 +223,7 @@ export function SafeImage({ src, fallback, ...props }: SafeImageProps) {
         if (dynImage) {
           setResolvedSrc(dynImage);
         } else {
-          setResolvedSrc(`/db_images/${src}.png`);
+          setResolvedSrc(`/assets/images/${src}.png`);
         }
       });
     } else {
@@ -4868,7 +4868,7 @@ Module #${i + 1}: ${b.title}
                   <div>
                     <h4 className="text-white font-semibold text-xs mb-0.5">源码级自带原图与排版配置</h4>
                     <p className="text-[11px] text-zinc-400 text-justify">
-                      您之前在 AI Studio 中完成的<strong>「永久源码固化/PERSISTENT SAVE」</strong>是一项由容器后端服务器直接对本地工程目录进行物理读写写实的操作，它已将您精心挑选的分类、排版模型以及原画大图直接编译打包进了静态代码库中（物理路径 <span className="text-[#00d2ff] font-mono text-[10px]">/public/db_images/</span>）。这才是最纯粹、零依赖的一体化方案。
+                      您之前在 AI Studio 中完成的<strong>「永久源码固化/PERSISTENT SAVE」</strong>是一项由容器后端服务器直接对本地工程目录进行物理读写写实的操作，它已将您精心挑选的分类、排版模型以及原画大图直接编译打包进了静态代码库中（物理路径 <span className="text-[#00d2ff] font-mono text-[10px]">/public/assets/images/</span>）。这才是最纯粹、零依赖的一体化方案。
                     </p>
                   </div>
                 </div>

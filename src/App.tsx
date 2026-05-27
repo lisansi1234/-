@@ -158,7 +158,7 @@ const ACCENT_PRESETS: Record<string, AccentColor> = {
 export default function App() {
   // Theme Color customization defaults to Anker Blue for instant customer satisfaction!
   const [themeAccent, setThemeAccent] = useState<"blue" | "orange" | "teal" | "purple">(() => {
-    const val = localStorage.getItem("ae_theme_accent") || (persistedDefaults?.localStorageDump as any)?.ae_theme_accent;
+    const val = (persistedDefaults?.localStorageDump as any)?.ae_theme_accent;
     return (val as any) || "blue";
   });
 
@@ -205,12 +205,6 @@ export default function App() {
 
   const [visibleSections, setVisibleSections] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem("ae_visible_sections_v3");
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("Failed parsing saved visibleSections", e);
-    }
-    try {
       const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[ "ae_visible_sections_v3" ];
       if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
     } catch (e) {
@@ -221,42 +215,55 @@ export default function App() {
 
   // Load dynamic defaults from server-side JSON storage on mount and dispatch to all components
   useEffect(() => {
-    fetch("/api/get-defaults")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.localStorageDump) {
-          // Store globally so that components loading later can also read it instantly
-          (window as any).__loadedDynamicDefaults = data;
-          setGlobalDynamicDefaults(data);
+    const applyData = (data: any) => {
+      if (data && data.localStorageDump) {
+        // Store globally so that components loading later can also read it instantly
+        (window as any).__loadedDynamicDefaults = data;
+        setGlobalDynamicDefaults(data);
 
-          // Dispatch to fast-sync text, widgets, projects & image layers
-          window.dispatchEvent(new CustomEvent("ae_dynamic_defaults_loaded", { detail: data }));
+        // Dispatch to fast-sync text, widgets, projects & image layers
+        window.dispatchEvent(new CustomEvent("ae_dynamic_defaults_loaded", { detail: data }));
 
-          // Update local App theme parameters safely
-          try {
-            const hasLocalSections = localStorage.getItem("ae_visible_sections_v3") !== null;
-            if (!hasLocalSections) {
-              const serverSections = (data.localStorageDump as any)?.["ae_visible_sections_v3"];
-              if (serverSections) {
-                const parsed = typeof serverSections === "string" ? JSON.parse(serverSections) : serverSections;
-                setVisibleSections(parsed);
-              }
-            }
-          } catch (e) {
-            console.error("Failed to sync server default sections", e);
+        // Update local App theme parameters safely
+        try {
+          const serverSections = (data.localStorageDump as any)?.["ae_visible_sections_v3"];
+          if (serverSections) {
+            const parsed = typeof serverSections === "string" ? JSON.parse(serverSections) : serverSections;
+            setVisibleSections(parsed);
           }
-
-          const hasLocalAccent = localStorage.getItem("ae_theme_accent") !== null;
-          if (!hasLocalAccent) {
-            const serverAccent = (data.localStorageDump as any)?.ae_theme_accent;
-            if (serverAccent && ACCENT_PRESETS[serverAccent]) {
-              setThemeAccent(serverAccent as any);
-            }
-          }
+        } catch (e) {
+          console.error("Failed to sync server default sections", e);
         }
+
+        const serverAccent = (data.localStorageDump as any)?.ae_theme_accent;
+        if (serverAccent && ACCENT_PRESETS[serverAccent]) {
+          setThemeAccent(serverAccent as any);
+        }
+      }
+    };
+
+    fetch("/api/get-defaults")
+      .then((res) => {
+        if (!res.ok) throw new Error("Express API not available (using static fallback)");
+        return res.json();
+      })
+      .then((data) => {
+        applyData(data);
       })
       .catch((err) => {
-        console.warn("API dynamic defaults fetch bypassed or failed (expected if static):", err);
+        console.warn("API dynamic defaults fetch failed, trying static ./persisted_defaults.json fallback:", err);
+        fetch("./persisted_defaults.json")
+          .then((res) => {
+            if (!res.ok) throw new Error("Static fallback file not found");
+            return res.json();
+          })
+          .then((data) => {
+            console.log("Successfully fetched static ./persisted_defaults.json fallback!");
+            applyData(data);
+          })
+          .catch((staticErr) => {
+            console.warn("Static JSON fetch failed as well:", staticErr);
+          });
       });
   }, []);
 

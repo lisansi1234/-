@@ -92,6 +92,10 @@ export function saveToIndexedDB(key: string, data: string): Promise<void> {
 }
 
 export function getFromIndexedDB(key: string): Promise<string | null> {
+  const verified = typeof window !== "undefined" && localStorage.getItem("ae_admin_verified_v3") === "true";
+  if (!verified) {
+    return Promise.resolve(null);
+  }
   return initIndexedDB()
     .then((db) => {
       return new Promise<string | null>((resolve, reject) => {
@@ -763,7 +767,7 @@ export default function AnkerBlueListingSystem({
   
   // --- STATE PERSISTENCE IN LOCALSTORAGE ---
   const [themeAccent, setThemeAccent] = useState<"blue" | "orange" | "teal" | "purple">(() => {
-    const val = localStorage.getItem("ae_theme_accent") || (persistedDefaults?.localStorageDump as any)?.ae_theme_accent;
+    const val = (persistedDefaults?.localStorageDump as any)?.ae_theme_accent;
     return (val as any) || "blue";
   });
 
@@ -781,31 +785,18 @@ export default function AnkerBlueListingSystem({
   }, []);
 
    const [projectsList, setProjectsList] = useState<PortfolioProject[]>(() => {
-    const saved = localStorage.getItem("anker_blue_projects_v2");
-    if (saved && !saved.includes("blob:")) return JSON.parse(saved);
-    if (saved) {
-      console.warn("Retrieved project list containing expired blob links. Purging local storage.");
-      localStorage.removeItem("anker_blue_projects_v2");
-      localStorage.removeItem("anker_blue_categories_v2");
-      localStorage.removeItem("anker_current_category_v2");
-      localStorage.removeItem("anker_active_project_id_v2");
-    }
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_blue_projects_v2;
     if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
     return DEFAULT_PROJECTS;
   });
 
   const [categories, setCategories] = useState<CategoryItem[]>(() => {
-    const saved = localStorage.getItem("anker_blue_categories_v2");
-    if (saved && !saved.includes("blob:")) return JSON.parse(saved);
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_blue_categories_v2;
     if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
     return DEFAULT_CATEGORIES;
   });
 
   const [currentCategory, setCurrentCategory] = useState<string>(() => {
-    const saved = localStorage.getItem("anker_current_category_v2");
-    if (saved) return saved;
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_current_category_v2;
     return (persisted as string) || "storage";
   });
@@ -884,8 +875,6 @@ export default function AnkerBlueListingSystem({
   }, [currentCategory]);
 
   const [activeProjectId, setActiveProjectId] = useState<number>(() => {
-    const savedActive = localStorage.getItem("anker_active_project_id_v2");
-    if (savedActive) return parseInt(savedActive, 10);
     const persisted = (persistedDefaults?.localStorageDump as any)?.anker_active_project_id_v2;
     if (persisted !== undefined && persisted !== null) {
       return typeof persisted === "number" ? persisted : parseInt(persisted as string, 10);

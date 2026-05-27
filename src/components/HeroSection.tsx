@@ -275,13 +275,13 @@ export default function HeroSection({ onExploreClick, isEditMode }: HeroSectionP
           <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-heading font-normal italic text-white tracking-[-4px] leading-[0.8] justify-center text-center">
             <DeletableText 
               id="hero_heading_1" 
-              defaultText="Designing High-Converting" 
+              defaultText="资深设计主管" 
               isEditMode={isEditMode} 
               className="text-5xl md:text-7xl lg:text-[4.8rem] font-heading font-normal italic text-white tracking-[-3px] leading-tight block" 
             />
             <DeletableText 
               id="hero_heading_2" 
-              defaultText="Visuals for Amazon Brands." 
+              defaultText="5年+亚马逊视觉策略经验" 
               isEditMode={isEditMode} 
               className="text-5xl md:text-7xl lg:text-[4.8rem] font-heading font-normal italic text-[#FF6B00] tracking-[-3px] leading-none block mt-1" 
             />
@@ -292,7 +292,7 @@ export default function HeroSection({ onExploreClick, isEditMode }: HeroSectionP
         <div className="max-w-2xl text-xs sm:text-sm md:text-base text-white/90 font-body font-light leading-relaxed text-center mb-8">
           <DeletableText 
             id="hero_subtitle" 
-            defaultText="结合 3D 渲染、AI 视觉生成与深度电商逻辑，助力头部品牌（如正浩风科技、3C数码、户外智能）提升 Listing 点击率（CTR）与转化率（CVR）。" 
+            defaultText="“深耕3C数码与大功率储能领域，将3D超精渲染、AI视觉工程与深层跨境电商逻辑融合。助力头部品牌（如储能出海先锋、3C数码大厂）重构 Listing 点击率（CTR）与转化率（CVR）" 
             isEditMode={isEditMode} 
             className="text-xs sm:text-sm md:text-base text-white/90 font-body font-light max-w-2xl text-center leading-relaxed" 
             as="span"
@@ -345,7 +345,7 @@ export default function HeroSection({ onExploreClick, isEditMode }: HeroSectionP
             </div>
             <div className="mt-4">
               <div className="font-heading italic text-3xl text-white tracking-[-1px] leading-none">
-                <DeletableText id="hero_stat1_val" defaultText="34.5 Min" isEditMode={isEditMode} className="font-heading italic text-3xl text-white" />
+                <DeletableText id="hero_stat1_val" defaultText="456" isEditMode={isEditMode} className="font-heading italic text-3xl text-white" />
               </div>
                <span className="text-[11px] text-white/50 font-body font-light mt-1.5 leading-tight block">
                 <DeletableText id="hero_stat1_lbl" defaultText="Average Videos Watch Time / 详情页平均超级留存时长" isEditMode={isEditMode} className="text-[11px] text-white/50" />

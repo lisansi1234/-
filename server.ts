@@ -497,6 +497,19 @@ app.post("/api/save-defaults", (req, res) => {
       "utf-8"
     );
 
+    // Also write a copy to public/persisted_defaults.json so it goes directly to dist/ on Vercel
+    try {
+      const publicFilePath = path.join(process.cwd(), "public", "persisted_defaults.json");
+      fs.writeFileSync(
+        publicFilePath,
+        JSON.stringify(payload, null, 2),
+        "utf-8"
+      );
+      console.log(`Copied current defaults content to /public/persisted_defaults.json!`);
+    } catch (savePublicErr) {
+      console.warn("Failed to copy defaults to public/ folder:", savePublicErr);
+    }
+
     console.log(`Successfully persisted active state details to persisted_defaults.json!`);
     return res.json({ 
       success: true, 

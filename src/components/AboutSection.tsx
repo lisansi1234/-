@@ -42,20 +42,36 @@ export default function AboutSection({
   // Dynamic Site Map list state
   const sitemapLocalStorageKey = "ae_sitemap_list_v3";
   const [siteMapNodes, setSiteMapNodes] = useState<SiteMapNode[]>(() => {
-    const saved = localStorage.getItem(sitemapLocalStorageKey);
-    if (saved) return JSON.parse(saved);
-    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[sitemapLocalStorageKey];
-    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    try {
+      const saved = localStorage.getItem(sitemapLocalStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed parsing saved siteMapNodes", e);
+    }
+    try {
+      const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[sitemapLocalStorageKey];
+      if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    } catch (e) {
+      console.warn("Failed parsing persisted siteMapNodes", e);
+    }
     return TECHNICAL_SITE_MAP;
   });
 
   // Dynamic Tech Stack list state
   const techStackLocalStorageKey = "ae_techstack_list_v3";
   const [techStacks, setTechStacks] = useState<TechStackItem[]>(() => {
-    const saved = localStorage.getItem(techStackLocalStorageKey);
-    if (saved) return JSON.parse(saved);
-    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[techStackLocalStorageKey];
-    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    try {
+      const saved = localStorage.getItem(techStackLocalStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed parsing saved techStacks", e);
+    }
+    try {
+      const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[techStackLocalStorageKey];
+      if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    } catch (e) {
+      console.warn("Failed parsing persisted techStacks", e);
+    }
     return DEFAULT_TECH_STACKS;
   });
 

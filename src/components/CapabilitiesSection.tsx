@@ -44,10 +44,18 @@ export default function CapabilitiesSection({ isEditMode }: CapabilitiesSectionP
   const localStorageKey = "ae_caps_list_v3";
   
   const [capabilities, setCapabilities] = useState<CapabilityItem[]>(() => {
-    const saved = localStorage.getItem(localStorageKey);
-    if (saved) return JSON.parse(saved);
-    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[localStorageKey];
-    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    try {
+      const saved = localStorage.getItem(localStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed parsing saved capabilities", e);
+    }
+    try {
+      const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[localStorageKey];
+      if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    } catch (e) {
+      console.warn("Failed parsing persisted capabilities", e);
+    }
     return DEFAULT_CAPABILITIES;
   });
 

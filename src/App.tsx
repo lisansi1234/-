@@ -204,10 +204,18 @@ export default function App() {
   const [showProtectionToast, setShowProtectionToast] = useState<boolean>(false);
 
   const [visibleSections, setVisibleSections] = useState<string[]>(() => {
-    const saved = localStorage.getItem("ae_visible_sections_v3");
-    if (saved) return JSON.parse(saved);
-    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[ "ae_visible_sections_v3" ];
-    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    try {
+      const saved = localStorage.getItem("ae_visible_sections_v3");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed parsing saved visibleSections", e);
+    }
+    try {
+      const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[ "ae_visible_sections_v3" ];
+      if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    } catch (e) {
+      console.warn("Failed parsing persisted visibleSections", e);
+    }
     return DEFAULT_VISIBLE_SECTIONS;
   });
 
@@ -225,13 +233,17 @@ export default function App() {
           window.dispatchEvent(new CustomEvent("ae_dynamic_defaults_loaded", { detail: data }));
 
           // Update local App theme parameters safely
-          const hasLocalSections = localStorage.getItem("ae_visible_sections_v3") !== null;
-          if (!hasLocalSections) {
-            const serverSections = (data.localStorageDump as any)?.["ae_visible_sections_v3"];
-            if (serverSections) {
-              const parsed = typeof serverSections === "string" ? JSON.parse(serverSections) : serverSections;
-              setVisibleSections(parsed);
+          try {
+            const hasLocalSections = localStorage.getItem("ae_visible_sections_v3") !== null;
+            if (!hasLocalSections) {
+              const serverSections = (data.localStorageDump as any)?.["ae_visible_sections_v3"];
+              if (serverSections) {
+                const parsed = typeof serverSections === "string" ? JSON.parse(serverSections) : serverSections;
+                setVisibleSections(parsed);
+              }
             }
+          } catch (e) {
+            console.error("Failed to sync server default sections", e);
           }
 
           const hasLocalAccent = localStorage.getItem("ae_theme_accent") !== null;

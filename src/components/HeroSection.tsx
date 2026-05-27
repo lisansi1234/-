@@ -31,10 +31,18 @@ export default function HeroSection({ onExploreClick, isEditMode }: HeroSectionP
 
   const partnersLocalStorageKey = "ae_hero_partners_v3";
   const [partners, setPartners] = useState<string[]>(() => {
-    const saved = localStorage.getItem(partnersLocalStorageKey);
-    if (saved) return JSON.parse(saved);
-    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[partnersLocalStorageKey];
-    if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    try {
+      const saved = localStorage.getItem(partnersLocalStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed parsing saved partners", e);
+    }
+    try {
+      const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[partnersLocalStorageKey];
+      if (persisted) return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    } catch (e) {
+      console.warn("Failed parsing persisted partners", e);
+    }
     return DEFAULT_PARTNERS;
   });
 

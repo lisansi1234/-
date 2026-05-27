@@ -20,16 +20,24 @@ export default function DeletableText({
   const localStorageKey = `ae_deltext_v3_${id}`;
   
   const [text, setText] = useState(() => {
-    const local = localStorage.getItem(localStorageKey);
-    if (local !== null) return local;
+    try {
+      const local = localStorage.getItem(localStorageKey);
+      if (local !== null) return local;
+    } catch (e) {
+      console.warn("localStorage block listed or empty", e);
+    }
     const persisted = (persistedDefaults?.localStorageDump as Record<string, string>)?.[localStorageKey];
     if (persisted !== undefined) return persisted;
     return defaultText;
   });
   
   const [isDeleted, setIsDeleted] = useState(() => {
-    const local = localStorage.getItem(`${localStorageKey}_deleted`);
-    if (local !== null) return local === "true";
+    try {
+      const local = localStorage.getItem(`${localStorageKey}_deleted`);
+      if (local !== null) return local === "true";
+    } catch (e) {
+      console.warn("localStorage block listed or empty", e);
+    }
     const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[`${localStorageKey}_deleted`];
     if (persisted !== undefined) {
       return persisted === true || persisted === "true";
@@ -38,19 +46,31 @@ export default function DeletableText({
   });
 
   const [extraClasses, setExtraClasses] = useState(() => {
-    const local = localStorage.getItem(`ae_delstyle_${id}`);
-    if (local !== null) return local;
+    try {
+      const local = localStorage.getItem(`ae_delstyle_${id}`);
+      if (local !== null) return local;
+    } catch (e) {
+      console.warn("localStorage block listed or empty", e);
+    }
     const persisted = (persistedDefaults?.localStorageDump as Record<string, string>)?.[`ae_delstyle_${id}`];
     if (persisted !== undefined) return persisted;
     return "";
   });
 
   const [siblings, setSiblings] = useState<string[]>(() => {
-    const saved = localStorage.getItem(`ae_deltext_v3_${id}_siblings`);
-    if (saved) return JSON.parse(saved);
-    const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[`ae_deltext_v3_${id}_siblings`];
-    if (persisted !== undefined && persisted !== null) {
-      return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+    try {
+      const saved = localStorage.getItem(`ae_deltext_v3_${id}_siblings`);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed parsing saved partners", e);
+    }
+    try {
+      const persisted = (persistedDefaults?.localStorageDump as Record<string, any>)?.[`ae_deltext_v3_${id}_siblings`];
+      if (persisted !== undefined && persisted !== null) {
+        return typeof persisted === "string" ? JSON.parse(persisted) : persisted;
+      }
+    } catch (e) {
+      console.warn("Failed parsing persisted siblings", e);
     }
     return [];
   });
